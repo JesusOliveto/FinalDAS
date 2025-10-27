@@ -4,7 +4,7 @@
    ========================================================= */
 
 -- crear y usar la base
-CREATE DATABASE RESTAURANTE;
+IF DB_ID('RESTAURANTE') IS NULL CREATE DATABASE RESTAURANTE;
 GO
 USE RESTAURANTE;
 GO
@@ -13,36 +13,35 @@ GO
    DROP en orden seguro
    ======================= */
 IF OBJECT_ID('dbo.reservas_sucursales','U') IS NOT NULL DROP TABLE dbo.reservas_sucursales;
+IF OBJECT_ID('dbo.clicks_contenidos','U')      IS NOT NULL DROP TABLE dbo.clicks_contenidos;
+
 IF OBJECT_ID('dbo.zonas_turnos_sucursales','U') IS NOT NULL DROP TABLE dbo.zonas_turnos_sucursales;
-IF OBJECT_ID('dbo.turnos_sucursales','U') IS NOT NULL DROP TABLE dbo.turnos_sucursales;
-IF OBJECT_ID('dbo.zonas_sucursales','U') IS NOT NULL DROP TABLE dbo.zonas_sucursales;
+IF OBJECT_ID('dbo.turnos_sucursales','U')       IS NOT NULL DROP TABLE dbo.turnos_sucursales;
+IF OBJECT_ID('dbo.zonas_sucursales','U')        IS NOT NULL DROP TABLE dbo.zonas_sucursales;
 
-IF OBJECT_ID('dbo.tipos_comidas_sucursales','U') IS NOT NULL DROP TABLE dbo.tipos_comidas_sucursales;
+IF OBJECT_ID('dbo.tipos_comidas_sucursales','U')            IS NOT NULL DROP TABLE dbo.tipos_comidas_sucursales;
 IF OBJECT_ID('dbo.especialidades_alimentarias_sucursales','U') IS NOT NULL DROP TABLE dbo.especialidades_alimentarias_sucursales;
-IF OBJECT_ID('dbo.estilos_sucursales','U') IS NOT NULL DROP TABLE dbo.estilos_sucursales;
+IF OBJECT_ID('dbo.estilos_sucursales','U')                  IS NOT NULL DROP TABLE dbo.estilos_sucursales;
 
-IF OBJECT_ID('dbo.contenidos','U') IS NOT NULL DROP TABLE dbo.contenidos;
+IF OBJECT_ID('dbo.contenidos','U')   IS NOT NULL DROP TABLE dbo.contenidos;
+IF OBJECT_ID('dbo.clientes','U')     IS NOT NULL DROP TABLE dbo.clientes;
+IF OBJECT_ID('dbo.sucursales','U')   IS NOT NULL DROP TABLE dbo.sucursales;
 
-IF OBJECT_ID('dbo.clientes','U') IS NOT NULL DROP TABLE dbo.clientes;
-
-IF OBJECT_ID('dbo.sucursales','U') IS NOT NULL DROP TABLE dbo.sucursales;
-
-IF OBJECT_ID('dbo.zonas','U') IS NOT NULL DROP TABLE dbo.zonas;
-IF OBJECT_ID('dbo.tipos_comidas','U') IS NOT NULL DROP TABLE dbo.tipos_comidas;
-IF OBJECT_ID('dbo.especialidades_alimentarias','U') IS NOT NULL DROP TABLE dbo.especialidades_alimentarias;
-IF OBJECT_ID('dbo.estilos','U') IS NOT NULL DROP TABLE dbo.estilos;
+IF OBJECT_ID('dbo.zonas','U')                        IS NOT NULL DROP TABLE dbo.zonas;
+IF OBJECT_ID('dbo.tipos_comidas','U')                IS NOT NULL DROP TABLE dbo.tipos_comidas;
+IF OBJECT_ID('dbo.especialidades_alimentarias','U')  IS NOT NULL DROP TABLE dbo.especialidades_alimentarias;
+IF OBJECT_ID('dbo.estilos','U')                      IS NOT NULL DROP TABLE dbo.estilos;
 
 IF OBJECT_ID('dbo.localidades','U') IS NOT NULL DROP TABLE dbo.localidades;
-IF OBJECT_ID('dbo.provincias','U') IS NOT NULL DROP TABLE dbo.provincias;
+IF OBJECT_ID('dbo.provincias','U')  IS NOT NULL DROP TABLE dbo.provincias;
 
 IF OBJECT_ID('dbo.categorias_precios','U') IS NOT NULL DROP TABLE dbo.categorias_precios;
-IF OBJECT_ID('dbo.restaurantes','U') IS NOT NULL DROP TABLE dbo.restaurantes;
+IF OBJECT_ID('dbo.restaurantes','U')      IS NOT NULL DROP TABLE dbo.restaurantes;
 GO
 
 /* =======================
    TABLAS MAESTRAS
    ======================= */
-
 CREATE TABLE dbo.provincias (
     cod_provincia   INT           NOT NULL,
     nom_provincia   VARCHAR(100)  NOT NULL,
@@ -54,6 +53,7 @@ CREATE TABLE dbo.localidades (
     nom_localidad   VARCHAR(120)  NOT NULL,
     cod_provincia   INT           NOT NULL,
     CONSTRAINT PK_localidades PRIMARY KEY (nro_localidad),
+    -- AK1: (cod_provincia, nom_localidad)
     CONSTRAINT UQ_localidades_codprov_nom UNIQUE (cod_provincia, nom_localidad),
     CONSTRAINT FK_localidades_provincias
         FOREIGN KEY (cod_provincia) REFERENCES dbo.provincias (cod_provincia)
@@ -100,7 +100,6 @@ CREATE TABLE dbo.estilos (
 /* =======================
    SUCURSALES y relación geográfica
    ======================= */
-
 CREATE TABLE dbo.sucursales (
     nro_restaurante           INT            NOT NULL,
     nro_sucursal              INT            NOT NULL,
@@ -128,7 +127,6 @@ CREATE TABLE dbo.sucursales (
 /* =======================
    Zonas habilitadas por sucursal
    ======================= */
-
 CREATE TABLE dbo.zonas_sucursales (
     nro_restaurante   INT   NOT NULL,
     nro_sucursal      INT   NOT NULL,
@@ -146,9 +144,8 @@ CREATE TABLE dbo.zonas_sucursales (
 );
 
 /* =======================
-   Turnos por sucursal y su cruce con zonas
+   Turnos por sucursal y cruce con zonas
    ======================= */
-
 CREATE TABLE dbo.turnos_sucursales (
     nro_restaurante  INT    NOT NULL,
     nro_sucursal     INT    NOT NULL,
@@ -181,7 +178,6 @@ CREATE TABLE dbo.zonas_turnos_sucursales (
 /* =======================
    Contenidos (restaurante/sucursal)
    ======================= */
-
 CREATE TABLE dbo.contenidos (
     nro_restaurante       INT             NOT NULL,
     nro_contenido         INT             NOT NULL,
@@ -201,7 +197,6 @@ CREATE TABLE dbo.contenidos (
 /* =======================
    Tipificaciones por sucursal
    ======================= */
-
 CREATE TABLE dbo.tipos_comidas_sucursales (
     nro_restaurante   INT   NOT NULL,
     nro_sucursal      INT   NOT NULL,
@@ -245,9 +240,8 @@ CREATE TABLE dbo.estilos_sucursales (
 );
 
 /* =======================
-   Clientes y Reservas
+   Clientes
    ======================= */
-
 CREATE TABLE dbo.clientes (
     nro_cliente   INT            NOT NULL,
     apellido      VARCHAR(120)   NOT NULL,
@@ -258,25 +252,47 @@ CREATE TABLE dbo.clientes (
     CONSTRAINT UQ_clientes_correo UNIQUE (correo)
 );
 
+/* =======================
+   Clicks en contenidos (modelo lógico)
+   ======================= */
+CREATE TABLE dbo.clicks_contenidos (
+    nro_restaurante      INT            NOT NULL,
+    nro_contenido        INT            NOT NULL,
+    nro_click            INT            NOT NULL,
+    fecha_hora_registro  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    nro_cliente          INT            NOT NULL,
+    costo_click          DECIMAL(12,2)  NULL,
+    CONSTRAINT PK_clicks_contenidos PRIMARY KEY (nro_restaurante, nro_contenido, nro_click),
+    CONSTRAINT FK_clicks_contenidos_contenidos
+        FOREIGN KEY (nro_restaurante, nro_contenido)
+        REFERENCES dbo.contenidos (nro_restaurante, nro_contenido),
+    CONSTRAINT FK_clicks_contenidos_clientes
+        FOREIGN KEY (nro_cliente) REFERENCES dbo.clientes (nro_cliente)
+);
+
+/* =======================
+   Reservas
+   ======================= */
 CREATE TABLE dbo.reservas_sucursales (
-    cod_reserva       INT            NOT NULL,
-    nro_cliente       INT            NOT NULL,
-    fecha_reserva     DATE           NOT NULL,
-    hora_reserva      TIME           NOT NULL,
-    nro_restaurante   INT            NOT NULL,
-    nro_sucursal      INT            NOT NULL,
-    cod_zona          INT            NOT NULL,
-    hora_desde        TIME           NOT NULL,  -- FK al turno
-    cant_adultos      INT            NOT NULL,
-    cant_menores      INT            NOT NULL DEFAULT 0,
-    costo_reserva     DECIMAL(12,2)  NULL,
-    cancelada         BIT            NOT NULL DEFAULT 0,
-    fecha_cancelacion DATE           NULL,
+    cod_reserva          INT            NOT NULL,
+    fecha_hora_registro  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    nro_cliente          INT            NOT NULL,
+    fecha_reserva        DATE           NOT NULL,
+    hora_reserva         TIME           NOT NULL,  -- (FK) coincide con el ER
+    nro_restaurante      INT            NOT NULL,
+    nro_sucursal         INT            NOT NULL,
+    cod_zona             INT            NOT NULL,
+    cant_adultos         INT            NOT NULL,
+    cant_menores         INT            NOT NULL DEFAULT 0,
+    costo_reserva        DECIMAL(12,2)  NULL,
+    cancelada            BIT            NOT NULL DEFAULT 0,
+    fecha_cancelacion    DATETIME2(0)   NULL,
     CONSTRAINT PK_reservas_sucursales PRIMARY KEY (cod_reserva),
     CONSTRAINT FK_reservas_clientes
         FOREIGN KEY (nro_cliente) REFERENCES dbo.clientes (nro_cliente),
+    -- FK al cruce zona/turno: hora_reserva -> hora_desde
     CONSTRAINT FK_reservas_zonas_turnos
-        FOREIGN KEY (nro_restaurante, nro_sucursal, cod_zona, hora_desde)
+        FOREIGN KEY (nro_restaurante, nro_sucursal, cod_zona, hora_reserva)
         REFERENCES dbo.zonas_turnos_sucursales (nro_restaurante, nro_sucursal, cod_zona, hora_desde),
     CONSTRAINT CK_reservas_cant_no_neg CHECK (cant_adultos >= 0 AND cant_menores >= 0)
 );
@@ -284,17 +300,17 @@ CREATE TABLE dbo.reservas_sucursales (
 /* =======================
    Índices recomendados (FK lookups)
    ======================= */
-
-CREATE INDEX IX_localidades_codprov ON dbo.localidades (cod_provincia);
-CREATE INDEX IX_sucursales_localidad ON dbo.sucursales (nro_localidad);
-CREATE INDEX IX_sucursales_categoria ON dbo.sucursales (nro_categoria);
-CREATE INDEX IX_zs_sucursal ON dbo.zonas_sucursales (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_ts_sucursal ON dbo.turnos_sucursales (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_zts_turno ON dbo.zonas_turnos_sucursales (nro_restaurante, nro_sucursal, hora_desde);
-CREATE INDEX IX_contenidos_sucursal ON dbo.contenidos (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_tcs_sucursal ON dbo.tipos_comidas_sucursales (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_eas_sucursal ON dbo.especialidades_alimentarias_sucursales (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_es_sucursal  ON dbo.estilos_sucursales (nro_restaurante, nro_sucursal);
-CREATE INDEX IX_reservas_turno_zona ON dbo.reservas_sucursales (nro_restaurante, nro_sucursal, cod_zona, hora_desde);
-CREATE INDEX IX_reservas_cliente ON dbo.reservas_sucursales (nro_cliente);
+CREATE INDEX IX_localidades_codprov           ON dbo.localidades (cod_provincia);
+CREATE INDEX IX_sucursales_localidad          ON dbo.sucursales (nro_localidad);
+CREATE INDEX IX_sucursales_categoria          ON dbo.sucursales (nro_categoria);
+CREATE INDEX IX_zs_sucursal                   ON dbo.zonas_sucursales (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_ts_sucursal                   ON dbo.turnos_sucursales (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_zts_turno                     ON dbo.zonas_turnos_sucursales (nro_restaurante, nro_sucursal, hora_desde);
+CREATE INDEX IX_contenidos_sucursal           ON dbo.contenidos (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_tcs_sucursal                  ON dbo.tipos_comidas_sucursales (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_eas_sucursal                  ON dbo.especialidades_alimentarias_sucursales (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_es_sucursal                   ON dbo.estilos_sucursales (nro_restaurante, nro_sucursal);
+CREATE INDEX IX_reservas_turno_zona           ON dbo.reservas_sucursales (nro_restaurante, nro_sucursal, cod_zona, hora_reserva);
+CREATE INDEX IX_reservas_cliente              ON dbo.reservas_sucursales (nro_cliente);
+CREATE INDEX IX_clicks_contenidos_cliente     ON dbo.clicks_contenidos (nro_cliente);
 GO

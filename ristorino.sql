@@ -4,7 +4,7 @@
    ========================================================= */
 
 -- Crear/usar la base
-CREATE DATABASE RISTORINO;
+IF DB_ID('RISTORINO') IS NULL CREATE DATABASE RISTORINO;
 GO
 USE RISTORINO;
 GO
@@ -14,6 +14,8 @@ GO
    ========================================================= */
 IF OBJECT_ID('dbo.preferencias_reservas_restaurantes','U') IS NOT NULL DROP TABLE dbo.preferencias_reservas_restaurantes;
 IF OBJECT_ID('dbo.reservas_restaurantes','U') IS NOT NULL DROP TABLE dbo.reservas_restaurantes;
+IF OBJECT_ID('dbo.clicks_contenidos_restaurantes','U') IS NOT NULL DROP TABLE dbo.clicks_contenidos_restaurantes;
+
 IF OBJECT_ID('dbo.idiomas_zonas_suc_restaurantes','U') IS NOT NULL DROP TABLE dbo.idiomas_zonas_suc_restaurantes;
 IF OBJECT_ID('dbo.zonas_turnos_sucursales_restaurantes','U') IS NOT NULL DROP TABLE dbo.zonas_turnos_sucursales_restaurantes;
 IF OBJECT_ID('dbo.turnos_sucursales_restaurantes','U') IS NOT NULL DROP TABLE dbo.turnos_sucursales_restaurantes;
@@ -64,7 +66,6 @@ CREATE TABLE dbo.localidades (
     nom_localidad  VARCHAR(120)  NOT NULL,
     cod_provincia  INT           NOT NULL,
     CONSTRAINT PK_localidades PRIMARY KEY (nro_localidad),
-    -- AK1: localidad única por provincia
     CONSTRAINT UQ_localidades_codprov_nom UNIQUE (cod_provincia, nom_localidad),
     CONSTRAINT FK_localidades_provincias
         FOREIGN KEY (cod_provincia) REFERENCES dbo.provincias(cod_provincia)
@@ -75,14 +76,13 @@ CREATE TABLE dbo.restaurantes (
     razon_social    VARCHAR(200)   NOT NULL,
     cuit            VARCHAR(20)    NOT NULL,
     CONSTRAINT PK_restaurantes PRIMARY KEY (nro_restaurante),
-    -- AK1: CUIT único
     CONSTRAINT UQ_restaurantes_cuit UNIQUE (cuit)
 );
 
 CREATE TABLE dbo.atributos (
     cod_atributo  INT            NOT NULL,
     nom_atributo  VARCHAR(120)   NOT NULL,
-    tipo_dato     VARCHAR(30)    NOT NULL,  -- p.ej.: 'INT','DECIMAL','VARCHAR','DATE','BIT'
+    tipo_dato     VARCHAR(30)    NOT NULL,
     CONSTRAINT PK_atributos PRIMARY KEY (cod_atributo)
 );
 
@@ -95,7 +95,7 @@ CREATE TABLE dbo.categorias_preferencias (
 CREATE TABLE dbo.idiomas (
     nro_idioma   INT            NOT NULL,
     nom_idioma   VARCHAR(100)   NOT NULL,
-    cod_idioma   VARCHAR(10)    NOT NULL,   -- ISO (ej: 'es-AR', 'en')
+    cod_idioma   VARCHAR(10)    NOT NULL,
     CONSTRAINT PK_idiomas PRIMARY KEY (nro_idioma),
     CONSTRAINT UQ_idiomas_cod UNIQUE (cod_idioma)
 );
@@ -107,7 +107,7 @@ CREATE TABLE dbo.idiomas (
 CREATE TABLE dbo.configuracion_restaurantes (
     nro_restaurante  INT           NOT NULL,
     cod_atributo     INT           NOT NULL,
-    valor            VARCHAR(1000) NULL,    -- se guarda como texto por heterogeneidad de tipo_dato
+    valor            VARCHAR(1000) NULL,
     CONSTRAINT PK_config_restaurantes PRIMARY KEY (nro_restaurante, cod_atributo),
     CONSTRAINT FK_config_restaurantes_rest
         FOREIGN KEY (nro_restaurante) REFERENCES dbo.restaurantes(nro_restaurante),
@@ -155,7 +155,7 @@ CREATE TABLE dbo.idiomas_dominio_cat_preferencias (
    ========================================================= */
 
 CREATE TABLE dbo.sucursales_restaurantes (
-    nro_restaurante           INT            NOT NULL,  -- (AK1.1) parte de AK con cod_sucursal_restaurante
+    nro_restaurante           INT            NOT NULL,
     nro_sucursal              INT            NOT NULL,
     nom_sucursal              VARCHAR(150)   NOT NULL,
     calle                     VARCHAR(120)   NULL,
@@ -166,9 +166,8 @@ CREATE TABLE dbo.sucursales_restaurantes (
     telefonos                 VARCHAR(120)   NULL,
     total_comensales          INT            NOT NULL,
     min_tolerencia_reserva    INT            NOT NULL,
-    cod_sucursal_restaurante  VARCHAR(30)    NOT NULL,  -- código legible de la sucursal dentro del restaurante
+    cod_sucursal_restaurante  VARCHAR(30)    NOT NULL,
     CONSTRAINT PK_sucursales_restaurantes PRIMARY KEY (nro_restaurante, nro_sucursal),
-    -- AK1: código único por restaurante
     CONSTRAINT UQ_suc_rest_cod UNIQUE (nro_restaurante, cod_sucursal_restaurante),
     CONSTRAINT FK_suc_rest_restaurantes
         FOREIGN KEY (nro_restaurante) REFERENCES dbo.restaurantes(nro_restaurante),
@@ -188,7 +187,7 @@ CREATE TABLE dbo.preferencias_restaurantes (
     nro_valor_dominio   INT           NOT NULL,
     nro_preferencia     INT           NOT NULL,
     observaciones       VARCHAR(500)  NULL,
-    nro_sucursal        INT           NULL,  -- si se especifica, referencia a la sucursal del restaurante
+    nro_sucursal        INT           NULL,
     CONSTRAINT PK_pref_restaurantes PRIMARY KEY (nro_restaurante, cod_categoria, nro_valor_dominio, nro_preferencia),
     CONSTRAINT FK_pref_rest_rest       FOREIGN KEY (nro_restaurante) REFERENCES dbo.restaurantes(nro_restaurante),
     CONSTRAINT FK_pref_rest_dom        FOREIGN KEY (cod_categoria, nro_valor_dominio)
@@ -237,6 +236,7 @@ CREATE TABLE dbo.contenidos_restaurantes (
     fecha_ini_vigencia     DATE            NULL,
     fecha_fin_vigencia     DATE            NULL,
     costo_click            DECIMAL(12,2)   NULL,
+    cod_contenido_restaurante VARCHAR(40)  NULL,          -- según modelo lógico
     CONSTRAINT PK_contenidos_rest PRIMARY KEY (nro_restaurante, nro_idioma, nro_contenido),
     CONSTRAINT FK_cont_rest_rest FOREIGN KEY (nro_restaurante) REFERENCES dbo.restaurantes(nro_restaurante),
     CONSTRAINT FK_cont_rest_idioma FOREIGN KEY (nro_idioma) REFERENCES dbo.idiomas(nro_idioma),
@@ -325,26 +325,26 @@ CREATE TABLE dbo.idiomas_estados (
    ========================================================= */
 
 CREATE TABLE dbo.reservas_restaurantes (
-    nro_cliente        INT            NOT NULL,
-    nro_reserva        INT            NOT NULL,
-    cod_reserva_sucursal  VARCHAR(40) NOT NULL,  -- AK legible de la reserva (indicado como AK1.1)
-    fecha_reserva      DATE           NOT NULL,
-    hora_reserva       TIME           NOT NULL,
-    nro_restaurante    INT            NOT NULL,
-    nro_sucursal       INT            NOT NULL,
-    cod_zona           INT            NOT NULL,
-    hora_desde         TIME           NOT NULL,
-    cant_adultos       INT            NOT NULL,
-    cant_menores       INT            NOT NULL DEFAULT 0,
-    cod_estado         INT            NOT NULL,
-    fecha_cancelacion  DATE           NULL,
-    costo_reserva      DECIMAL(12,2)  NULL,
+    nro_cliente           INT            NOT NULL,
+    nro_reserva           INT            NOT NULL,
+    cod_reserva_sucursal  VARCHAR(40)    NOT NULL,  -- AK legible
+    fecha_hora_registro   DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(), -- (modelo lógico)
+    fecha_reserva         DATE           NOT NULL,
+    hora_reserva          TIME           NOT NULL,  -- FK a hora_desde del cruce
+    nro_restaurante       INT            NOT NULL,
+    nro_sucursal          INT            NOT NULL,
+    cod_zona              INT            NOT NULL,
+    cant_adultos          INT            NOT NULL,
+    cant_menores          INT            NOT NULL DEFAULT 0,
+    cod_estado            INT            NOT NULL,
+    fecha_cancelacion     DATE           NULL,
+    costo_reserva         DECIMAL(12,2)  NULL,
     CONSTRAINT PK_reservas_restaurantes PRIMARY KEY (nro_cliente, nro_reserva),
     CONSTRAINT UQ_reservas_cod_sucursal UNIQUE (cod_reserva_sucursal),
     CONSTRAINT FK_reservas_cliente FOREIGN KEY (nro_cliente) REFERENCES dbo.clientes(nro_cliente),
     CONSTRAINT FK_reservas_estado  FOREIGN KEY (cod_estado)  REFERENCES dbo.estados_reservas(cod_estado),
     CONSTRAINT FK_reservas_turno_zona
-        FOREIGN KEY (nro_restaurante, nro_sucursal, cod_zona, hora_desde)
+        FOREIGN KEY (nro_restaurante, nro_sucursal, cod_zona, hora_reserva)
         REFERENCES dbo.zonas_turnos_sucursales_restaurantes(nro_restaurante, nro_sucursal, cod_zona, hora_desde),
     CONSTRAINT CK_reservas_cant_nonneg CHECK (cant_adultos >= 0 AND cant_menores >= 0)
 );
@@ -360,15 +360,12 @@ CREATE TABLE dbo.preferencias_reservas_restaurantes (
     CONSTRAINT PK_pref_reservas_rest PRIMARY KEY (
         nro_cliente, nro_reserva, cod_categoria, nro_valor_dominio, nro_preferencia
     ),
-    -- Reserva referenciada
     CONSTRAINT FK_pref_res_rest_reserva
         FOREIGN KEY (nro_cliente, nro_reserva)
         REFERENCES dbo.reservas_restaurantes(nro_cliente, nro_reserva),
-    -- Preferencia declarada por el restaurante:
     CONSTRAINT FK_pref_res_rest_pref_rest
         FOREIGN KEY (nro_restaurante, cod_categoria, nro_valor_dominio, nro_preferencia)
         REFERENCES dbo.preferencias_restaurantes(nro_restaurante, cod_categoria, nro_valor_dominio, nro_preferencia),
-    -- Dominio de la categoría (consistencia)
     CONSTRAINT FK_pref_res_rest_dom
         FOREIGN KEY (cod_categoria, nro_valor_dominio)
         REFERENCES dbo.dominio_categorias_preferencias(cod_categoria, nro_valor_dominio)
@@ -387,7 +384,27 @@ CREATE TABLE dbo.costos (
 );
 
 /* =========================================================
-   ÍNDICES recomendados para lookups y filtros comunes
+   CLICKS en CONTENIDOS (modelo lógico)
+   ========================================================= */
+CREATE TABLE dbo.clicks_contenidos_restaurantes (
+    nro_restaurante      INT            NOT NULL,
+    nro_idioma           INT            NOT NULL,
+    nro_contenido        INT            NOT NULL,
+    nro_click            INT            NOT NULL,
+    fecha_hora_registro  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
+    nro_cliente          INT            NOT NULL,
+    costo_click          DECIMAL(12,2)  NULL,
+    notificado           BIT            NOT NULL DEFAULT 0,
+    CONSTRAINT PK_clicks_cont_rest PRIMARY KEY (nro_restaurante, nro_idioma, nro_contenido, nro_click),
+    CONSTRAINT FK_clicks_cont_rest_contenido
+        FOREIGN KEY (nro_restaurante, nro_idioma, nro_contenido)
+        REFERENCES dbo.contenidos_restaurantes(nro_restaurante, nro_idioma, nro_contenido),
+    CONSTRAINT FK_clicks_cont_rest_cliente
+        FOREIGN KEY (nro_cliente) REFERENCES dbo.clientes(nro_cliente)
+);
+
+/* =========================================================
+   ÍNDICES recomendados
    ========================================================= */
 
 -- Localidades
@@ -417,7 +434,10 @@ CREATE INDEX IX_ztsr_turno ON dbo.zonas_turnos_sucursales_restaurantes(nro_resta
 CREATE INDEX IX_idiomas_estados_idioma ON dbo.idiomas_estados(nro_idioma);
 
 -- Reservas
-CREATE INDEX IX_reservas_por_turno_zona ON dbo.reservas_restaurantes(nro_restaurante, nro_sucursal, cod_zona, hora_desde);
+CREATE INDEX IX_reservas_por_turno_zona ON dbo.reservas_restaurantes(nro_restaurante, nro_sucursal, cod_zona, hora_reserva);
 CREATE INDEX IX_reservas_por_estado ON dbo.reservas_restaurantes(cod_estado);
 CREATE INDEX IX_reservas_por_cliente ON dbo.reservas_restaurantes(nro_cliente);
+
+-- Clicks
+CREATE INDEX IX_clicks_cont_rest_cliente ON dbo.clicks_contenidos_restaurantes(nro_cliente);
 GO
