@@ -1,12 +1,14 @@
 /* =========================================================
-   Base de datos: RESTAURANTE 
+   Base de datos: BODEGON
    Motor destino: Microsoft SQL Server (T-SQL)
    ========================================================= */
     
 -- crear y usar la base
-IF DB_ID('RESTAURANTE') IS NULL CREATE DATABASE RESTAURANTE;
+IF DB_ID('BODEGON') IS NULL CREATE DATABASE BODEGON;
 GO
-USE RESTAURANTE;
+
+
+USE BODEGON;
 GO
 
 /* =======================
@@ -314,3 +316,166 @@ CREATE INDEX IX_reservas_turno_zona           ON dbo.reservas_sucursales (nro_re
 CREATE INDEX IX_reservas_cliente              ON dbo.reservas_sucursales (nro_cliente);
 CREATE INDEX IX_clicks_contenidos_cliente     ON dbo.clicks_contenidos (nro_cliente);
 GO
+
+
+
+
+/* =========================================================
+   SEED DE DATOS REALISTAS PARA BODEGÓN (solo INSERT INTO)
+   - Mantener vacías: reservas_sucursales, clicks_contenidos, clientes
+   - Inserta: provincias/localidades, restaurante, categorías de precios,
+              zonas, tipos_comidas, especialidades_alimentarias (preferencias),
+              estilos, sucursales, zonas_sucursales, turnos_sucursales,
+              zonas_turnos_sucursales, contenidos, tipos_comidas_sucursales,
+              especialidades_alimentarias_sucursales, estilos_sucursales
+   ========================================================= */
+
+-- Provincias y Localidades (Córdoba)
+INSERT INTO dbo.provincias (cod_provincia, nom_provincia) VALUES
+    (5, 'Córdoba');
+
+INSERT INTO dbo.localidades (nro_localidad, nom_localidad, cod_provincia) VALUES
+    (501, 'Córdoba', 5),
+
+-- Restaurante
+INSERT INTO dbo.restaurantes (nro_restaurante, razon_social, cuit) VALUES
+    (1, 'Bodegón La Esquina', '30-71234567-8');
+
+-- Categorías de precios
+INSERT INTO dbo.categorias_precios (nro_categoria, nom_categoria) VALUES
+    (1, 'Económico'),
+    (2, 'Accesible'),
+    (3, 'Medio'),
+    (4, 'Premium');
+
+-- Zonas del restaurante (catálogo)
+INSERT INTO dbo.zonas (cod_zona, nom_zona) VALUES
+    (1, 'Salón Principal'),
+    (2, 'Patio Interno'),
+    (3, 'Terraza'),
+    (4, 'Exterior'),
+    (5, 'Ala Norte');
+
+-- Tipos de comidas
+INSERT INTO dbo.tipos_comidas (nro_tipo_comida, nom_tipo_comida) VALUES
+    (1, 'Pastas'),
+    (2, 'Pizzas'),
+    (3, 'Lomitos'),
+    (4, 'Minutas'),
+    (5, 'Parrilla'),
+    (6, 'Empanadas'),
+    (7, 'Pollo a las brasas');
+
+-- Preferencias / Especialidades alimentarias (restricciones)
+INSERT INTO dbo.especialidades_alimentarias (nro_preferencia, nom_preferencia) VALUES
+    (1, 'Sin TAAC (celíacos)'),
+    (2, 'Vegano'),
+    (3, 'Vegetariano'),
+    (4, 'Sin lactosa'),
+    (5, 'Hiposódico');
+
+-- Estilos (origen)
+INSERT INTO dbo.estilos (nro_estilo, nom_estilo) VALUES
+    (1, 'Argentina'),
+    (2, 'Italiana'),
+    (3, 'Parrilla'),
+    (4, 'Rotisería');
+
+-- Sucursales (nombres por calle)
+INSERT INTO dbo.sucursales (
+    nro_restaurante, nro_sucursal, nom_sucursal, calle, nro_calle, barrio, nro_localidad,
+    cod_postal, telefonos, total_comensales, min_tolerencia_reserva, nro_categoria
+) VALUES
+    (1, 1, 'Av. Colón',         'Av. Colón',        3450, 'Alta Córdoba',       501, '5000', '+54 351 555-0101', 120, 15, 2),
+    (1, 2, 'Bv. San Juan',      'Bv. San Juan',      950, 'Centro',             501, '5000', '+54 351 555-0202',  90, 15, 3),
+    (1, 3, 'Av. Rafael Núñez',  'Av. Rafael Núñez', 5235, 'Cerro de las Rosas', 501, '5009', '+54 351 555-0303',  80, 15, 3);
+
+-- Zonas habilitadas por sucursal
+INSERT INTO dbo.zonas_sucursales (nro_restaurante, nro_sucursal, cod_zona, cant_comensales, permite_menores, habilitada) VALUES
+    -- Sucursal 1
+    (1, 1, 1, 20, 1, 1),
+    (1, 1, 2, 18, 1, 1),
+    (1, 1, 3, 16, 1, 1),
+    (1, 1, 4, 12, 1, 1),
+    -- Sucursal 2
+    (1, 2, 1, 20, 1, 1),
+    (1, 2, 2, 16, 1, 1),
+    (1, 2, 4, 12, 1, 1),
+    -- Sucursal 3
+    (1, 3, 1, 18, 1, 1),
+    (1, 3, 2, 16, 1, 1),
+    (1, 3, 5, 15, 1, 1);
+
+-- Turnos por sucursal (5 turnos, 3 horas c/u: 11:00,14:00,17:00,20:00,23:00)
+INSERT INTO dbo.turnos_sucursales (nro_restaurante, nro_sucursal, hora_desde, hora_hasta, habilitado) VALUES
+    -- Sucursal 1
+    (1, 1, '11:00', '14:00', 1),
+    (1, 1, '14:00', '17:00', 1),
+    (1, 1, '17:00', '20:00', 1),
+    (1, 1, '20:00', '23:00', 1),
+    (1, 1, '23:00', '02:00', 1),
+    -- Sucursal 2
+    (1, 2, '11:00', '14:00', 1),
+    (1, 2, '14:00', '17:00', 1),
+    (1, 2, '17:00', '20:00', 1),
+    (1, 2, '20:00', '23:00', 1),
+    (1, 2, '23:00', '02:00', 1),
+    -- Sucursal 3
+    (1, 3, '11:00', '14:00', 1),
+    (1, 3, '14:00', '17:00', 1),
+    (1, 3, '17:00', '20:00', 1),
+    (1, 3, '20:00', '23:00', 1),
+    (1, 3, '23:00', '02:00', 1);
+
+-- Cruce Zonas x Turnos (permite menores: 1 en todos los casos)
+INSERT INTO dbo.zonas_turnos_sucursales (nro_restaurante, nro_sucursal, cod_zona, hora_desde, permite_menores) VALUES
+    -- Sucursal 1: zonas 1,2,3,4 en todos los turnos
+    (1,1,1,'11:00',1),(1,1,1,'14:00',1),(1,1,1,'17:00',1),(1,1,1,'20:00',1),(1,1,1,'23:00',1),
+    (1,1,2,'11:00',1),(1,1,2,'14:00',1),(1,1,2,'17:00',1),(1,1,2,'20:00',1),(1,1,2,'23:00',1),
+    (1,1,3,'11:00',1),(1,1,3,'14:00',1),(1,1,3,'17:00',1),(1,1,3,'20:00',1),(1,1,3,'23:00',1),
+    (1,1,4,'11:00',1),(1,1,4,'14:00',1),(1,1,4,'17:00',1),(1,1,4,'20:00',1),(1,1,4,'23:00',1),
+    -- Sucursal 2: zonas 1,2,4
+    (1,2,1,'11:00',1),(1,2,1,'14:00',1),(1,2,1,'17:00',1),(1,2,1,'20:00',1),(1,2,1,'23:00',1),
+    (1,2,2,'11:00',1),(1,2,2,'14:00',1),(1,2,2,'17:00',1),(1,2,2,'20:00',1),(1,2,2,'23:00',1),
+    (1,2,4,'11:00',1),(1,2,4,'14:00',1),(1,2,4,'17:00',1),(1,2,4,'20:00',1),(1,2,4,'23:00',1),
+    -- Sucursal 3: zonas 1,2,5
+    (1,3,1,'11:00',1),(1,3,1,'14:00',1),(1,3,1,'17:00',1),(1,3,1,'20:00',1),(1,3,1,'23:00',1),
+    (1,3,2,'11:00',1),(1,3,2,'14:00',1),(1,3,2,'17:00',1),(1,3,2,'20:00',1),(1,3,2,'23:00',1),
+    (1,3,5,'11:00',1),(1,3,5,'14:00',1),(1,3,5,'17:00',1),(1,3,5,'20:00',1),(1,3,5,'23:00',1);
+
+-- Contenidos promocionales (a nivel restaurante y sucursal)
+INSERT INTO dbo.contenidos (nro_restaurante, nro_contenido, contenido_a_publicar, imagen_a_publicar, publicado, costo_click, nro_sucursal) VALUES
+    (1, 1, 'Promo: Milanesa napolitana con papas y bebida', NULL, 1, 50.00, NULL),
+    (1, 2, 'Finde: Asado a la parrilla - porciones para compartir', NULL, 1, 70.00, NULL),
+    (1, 3, '2x1 en empanadas los martes', NULL, 1, 30.00, NULL),
+    (1, 4, 'Lomito completo + papas (Sucursal Av. Colón)', NULL, 1, 40.00, 1),
+    (1, 5, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', NULL, 1, 45.00, 3);
+
+-- Tipos de comidas habilitados por sucursal
+INSERT INTO dbo.tipos_comidas_sucursales (nro_restaurante, nro_sucursal, nro_tipo_comida, habilitado) VALUES
+    -- Av. Colón
+    (1,1,1,1),(1,1,2,1),(1,1,3,1),(1,1,4,1),(1,1,5,1),(1,1,6,1),(1,1,7,1),
+    -- Bv. San Juan
+    (1,2,1,1),(1,2,2,1),(1,2,3,1),(1,2,4,1),(1,2,6,1),
+    -- Av. Rafael Núñez
+    (1,3,2,1),(1,3,3,1),(1,3,4,1),(1,3,5,1),(1,3,7,1);
+
+-- Preferencias habilitadas por sucursal
+INSERT INTO dbo.especialidades_alimentarias_sucursales (nro_restaurante, nro_sucursal, nro_preferencia, habilitada) VALUES
+    -- Av. Colón
+    (1,1,1,1),(1,1,3,1),(1,1,4,1),
+    -- Bv. San Juan
+    (1,2,1,1),(1,2,2,1),(1,2,4,1),
+    -- Av. Rafael Núñez
+    (1,3,1,1),(1,3,3,1),(1,3,5,1);
+
+-- Estilos por sucursal
+INSERT INTO dbo.estilos_sucursales (nro_restaurante, nro_sucursal, nro_estilo, habilitado) VALUES
+    -- Av. Colón
+    (1,1,1,1),(1,1,4,1),
+    -- Bv. San Juan
+    (1,2,1,1),(1,2,2,1),
+    -- Av. Rafael Núñez
+    (1,3,1,1),(1,3,3,1);
+
+-- NOTA: No se insertan clientes, reservas ni clicks según requisitos

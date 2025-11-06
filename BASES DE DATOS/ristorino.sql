@@ -441,3 +441,350 @@ CREATE INDEX IX_reservas_por_cliente ON dbo.reservas_restaurantes(nro_cliente);
 -- Clicks
 CREATE INDEX IX_clicks_cont_rest_cliente ON dbo.clicks_contenidos_restaurantes(nro_cliente);
 GO
+/* =========================================================
+   SEED: PROVINCIAS y LOCALIDADES de ARGENTINA
+   - Motor: SQL Server (T-SQL)
+   - Idempotente: usa MERGE para upsert
+   - Códigos:
+       * Provincias: 1..24 (incluye CABA como jurisdicción)
+       * Localidades: cod_provincia*100 + correlativo (1..5)
+   ========================================================= */
+
+-- Provincias (AR)
+MERGE dbo.provincias AS tgt
+USING (
+    VALUES
+        (1,  'Buenos Aires'),
+        (2,  'Catamarca'),
+        (3,  'Chaco'),
+        (4,  'Chubut'),
+        (5,  'Córdoba'),
+        (6,  'Corrientes'),
+        (7,  'Entre Ríos'),
+        (8,  'Formosa'),
+        (9,  'Jujuy'),
+        (10, 'La Pampa'),
+        (11, 'La Rioja'),
+        (12, 'Mendoza'),
+        (13, 'Misiones'),
+        (14, 'Neuquén'),
+        (15, 'Río Negro'),
+        (16, 'Salta'),
+        (17, 'San Juan'),
+        (18, 'San Luis'),
+        (19, 'Santa Cruz'),
+        (20, 'Santa Fe'),
+        (21, 'Santiago del Estero'),
+        (22, 'Tierra del Fuego, Antártida e Islas del Atlántico Sur'),
+    (23, 'Tucumán'),
+    (24, 'Ciudad Autónoma de Buenos Aires')
+) AS src(cod_provincia, nom_provincia)
+ON tgt.cod_provincia = src.cod_provincia
+WHEN MATCHED THEN UPDATE SET tgt.nom_provincia = src.nom_provincia
+WHEN NOT MATCHED THEN INSERT (cod_provincia, nom_provincia)
+VALUES (src.cod_provincia, src.nom_provincia);
+GO
+/* =========================================================
+   SEED: SINCRONIZACIÓN INICIAL DESDE BODEGÓN (Ristorino)
+   Premisas:
+   - Sin reservas ni clicks cargados
+   - Único idioma: Español (es-AR)
+   - Sin clientes cargados
+   - Atributos + Configuración: diseño invertido (catálogos del restaurante como atributos/valores)
+   ========================================================= */
+
+-- Idioma base (Español)
+INSERT INTO dbo.idiomas (nro_idioma, nom_idioma, cod_idioma)
+VALUES (1, 'Español', 'es-AR');
+GO
+
+-- Restaurante comunicado: Bodegón La Esquina
+INSERT INTO dbo.restaurantes (nro_restaurante, razon_social, cuit)
+VALUES (1, 'Bodegón La Esquina', '30-71234567-8');
+GO
+
+-- Sucursales del Bodegón (localidad Córdoba: 501)
+INSERT INTO dbo.sucursales_restaurantes (
+    nro_restaurante, nro_sucursal, nom_sucursal, calle, nro_calle, barrio, nro_localidad,
+    cod_postal, telefonos, total_comensales, min_tolerencia_reserva, cod_sucursal_restaurante
+) VALUES
+    (1, 1, 'Av. Colón',        'Av. Colón',        3450, 'Alta Córdoba',       501, '5000', '+54 351 555-0101', 120, 15, 'COLON'),
+    (1, 2, 'Bv. San Juan',     'Bv. San Juan',      950, 'Centro',             501, '5000', '+54 351 555-0202',  90, 15, 'SANJUAN'),
+    (1, 3, 'Av. Rafael Núñez', 'Av. Rafael Núñez', 5235, 'Cerro de las Rosas', 501, '5009', '+54 351 555-0303',  80, 15, 'RAFANUNEZ');
+GO
+
+-- Zonas habilitadas por sucursal (capacidad por zona reducida 10..20)
+INSERT INTO dbo.zonas_sucursales_restaurantes (
+    nro_restaurante, nro_sucursal, cod_zona, desc_zona, cant_comensales, permite_menores, habilitada
+) VALUES
+    -- Sucursal 1
+    (1, 1, 1, 'Salón Principal', 20, 1, 1),
+    (1, 1, 2, 'Patio Interno',   18, 1, 1),
+    (1, 1, 3, 'Terraza',         16, 1, 1),
+    (1, 1, 4, 'Exterior',        12, 1, 1),
+    -- Sucursal 2
+    (1, 2, 1, 'Salón Principal', 20, 1, 1),
+    (1, 2, 2, 'Patio Interno',   16, 1, 1),
+    (1, 2, 4, 'Exterior',        12, 1, 1),
+    -- Sucursal 3
+    (1, 3, 1, 'Salón Principal', 18, 1, 1),
+    (1, 3, 2, 'Patio Interno',   16, 1, 1),
+    (1, 3, 5, 'Ala Norte',       15, 1, 1);
+GO
+
+-- Traducciones de zonas (Español)
+INSERT INTO dbo.idiomas_zonas_suc_restaurantes (
+    nro_restaurante, nro_sucursal, cod_zona, nro_idioma, zona, desc_zona
+) VALUES
+    (1,1,1,1,'Salón Principal', NULL),
+    (1,1,2,1,'Patio Interno',   NULL),
+    (1,1,3,1,'Terraza',         NULL),
+    (1,1,4,1,'Exterior',        NULL),
+    (1,2,1,1,'Salón Principal', NULL),
+    (1,2,2,1,'Patio Interno',   NULL),
+    (1,2,4,1,'Exterior',        NULL),
+    (1,3,1,1,'Salón Principal', NULL),
+    (1,3,2,1,'Patio Interno',   NULL),
+    (1,3,5,1,'Ala Norte',       NULL);
+GO
+
+-- Turnos por sucursal (5 turnos, 3 horas)
+INSERT INTO dbo.turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, hora_desde, hora_hasta, habilitado) VALUES
+    -- Sucursal 1
+    (1,1,'11:00','14:00',1), (1,1,'14:00','17:00',1), (1,1,'17:00','20:00',1), (1,1,'20:00','23:00',1), (1,1,'23:00','02:00',1),
+    -- Sucursal 2
+    (1,2,'11:00','14:00',1), (1,2,'14:00','17:00',1), (1,2,'17:00','20:00',1), (1,2,'20:00','23:00',1), (1,2,'23:00','02:00',1),
+    -- Sucursal 3
+    (1,3,'11:00','14:00',1), (1,3,'14:00','17:00',1), (1,3,'17:00','20:00',1), (1,3,'20:00','23:00',1), (1,3,'23:00','02:00',1);
+GO
+
+-- Cruce Zonas x Turnos (permite menores = 1)
+INSERT INTO dbo.zonas_turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, cod_zona, hora_desde, permite_menores) VALUES
+    -- Sucursal 1
+    (1,1,1,'11:00',1),(1,1,1,'14:00',1),(1,1,1,'17:00',1),(1,1,1,'20:00',1),(1,1,1,'23:00',1),
+    (1,1,2,'11:00',1),(1,1,2,'14:00',1),(1,1,2,'17:00',1),(1,1,2,'20:00',1),(1,1,2,'23:00',1),
+    (1,1,3,'11:00',1),(1,1,3,'14:00',1),(1,1,3,'17:00',1),(1,1,3,'20:00',1),(1,1,3,'23:00',1),
+    (1,1,4,'11:00',1),(1,1,4,'14:00',1),(1,1,4,'17:00',1),(1,1,4,'20:00',1),(1,1,4,'23:00',1),
+    -- Sucursal 2
+    (1,2,1,'11:00',1),(1,2,1,'14:00',1),(1,2,1,'17:00',1),(1,2,1,'20:00',1),(1,2,1,'23:00',1),
+    (1,2,2,'11:00',1),(1,2,2,'14:00',1),(1,2,2,'17:00',1),(1,2,2,'20:00',1),(1,2,2,'23:00',1),
+    (1,2,4,'11:00',1),(1,2,4,'14:00',1),(1,2,4,'17:00',1),(1,2,4,'20:00',1),(1,2,4,'23:00',1),
+    -- Sucursal 3
+    (1,3,1,'11:00',1),(1,3,1,'14:00',1),(1,3,1,'17:00',1),(1,3,1,'20:00',1),(1,3,1,'23:00',1),
+    (1,3,2,'11:00',1),(1,3,2,'14:00',1),(1,3,2,'17:00',1),(1,3,2,'20:00',1),(1,3,2,'23:00',1),
+    (1,3,5,'11:00',1),(1,3,5,'14:00',1),(1,3,5,'17:00',1),(1,3,5,'20:00',1),(1,3,5,'23:00',1);
+GO
+
+-- Contenidos sincronizados (Español)
+INSERT INTO dbo.contenidos_restaurantes (
+    nro_restaurante, nro_idioma, nro_contenido, nro_sucursal,
+    contenido_promocional, imagen_promocional, contenido_a_publicar,
+    fecha_ini_vigencia, fecha_fin_vigencia, costo_click, cod_contenido_restaurante
+) VALUES
+    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', NULL, 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
+    (1,1,2, NULL, 'Finde Asado para compartir',   NULL, 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
+    (1,1,3, NULL, 'Martes 2x1 Empanadas',         NULL, '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
+    (1,1,4, 1,    'Lomito completo + papas',      NULL, 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
+    (1,1,5, 3,    'Pollo a las brasas al peso',   NULL, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
+GO
+
+-- Diseño invertido: Atributos que representan catálogos del restaurante
+INSERT INTO dbo.atributos (cod_atributo, nom_atributo, tipo_dato) VALUES
+    (1, 'tipos_comidas', 'JSON'),
+    (2, 'preferencias_alimentarias', 'JSON'),
+    (3, 'estilos', 'JSON'),
+    (4, 'zonas', 'JSON');
+GO
+
+-- Configuración del restaurante (valores como JSON)
+INSERT INTO dbo.configuracion_restaurantes (nro_restaurante, cod_atributo, valor) VALUES
+    (1, 1, '["Pastas","Pizzas","Lomitos","Minutas","Parrilla","Empanadas","Pollo a las brasas"]'),
+    (1, 2, '["Sin TAAC (celíacos)","Vegano","Vegetariano","Sin lactosa","Hiposódico"]'),
+    (1, 3, '["Argentina","Italiana","Parrilla","Rotisería"]'),
+    (1, 4, '["Salón Principal","Patio Interno","Terraza","Exterior","Ala Norte"]');
+GO
+
+
+-- Localidades principales (5 por provincia)
+MERGE dbo.localidades AS tgt
+USING (
+    VALUES
+        -- 1 Buenos Aires
+        (101, 'La Plata',                         1),
+        (102, 'Mar del Plata',                    1),
+        (103, 'Bahía Blanca',                     1),
+        (104, 'Tandil',                           1),
+        (105, 'San Nicolás de los Arroyos',       1),
+
+        -- 2 Catamarca
+        (201, 'San Fernando del Valle de Catamarca', 2),
+        (202, 'Andalgalá',                        2),
+        (203, 'Tinogasta',                        2),
+        (204, 'Belén',                            2),
+        (205, 'Santa María',                      2),
+
+        -- 3 Chaco
+        (301, 'Resistencia',                      3),
+        (302, 'Presidencia Roque Sáenz Peña',     3),
+        (303, 'Villa Ángela',                     3),
+        (304, 'Barranqueras',                     3),
+        (305, 'Charata',                          3),
+
+        -- 4 Chubut
+        (401, 'Rawson',                           4),
+        (402, 'Comodoro Rivadavia',               4),
+        (403, 'Trelew',                           4),
+        (404, 'Puerto Madryn',                    4),
+        (405, 'Esquel',                           4),
+
+        -- 5 Córdoba
+        (501, 'Córdoba',                          5),
+        (502, 'Río Cuarto',                       5),
+        (503, 'Villa Carlos Paz',                 5),
+        (504, 'Villa María',                      5),
+        (505, 'San Francisco',                    5),
+
+        -- 6 Corrientes
+        (601, 'Corrientes',                       6),
+        (602, 'Goya',                             6),
+        (603, 'Paso de los Libres',               6),
+        (604, 'Mercedes',                         6),
+        (605, 'Curuzú Cuatiá',                    6),
+
+        -- 7 Entre Ríos
+        (701, 'Paraná',                           7),
+        (702, 'Concordia',                        7),
+        (703, 'Gualeguaychú',                     7),
+        (704, 'Concepción del Uruguay',           7),
+        (705, 'Gualeguay',                        7),
+
+        -- 8 Formosa
+        (801, 'Formosa',                          8),
+        (802, 'Clorinda',                         8),
+        (803, 'Pirané',                           8),
+        (804, 'El Colorado',                      8),
+        (805, 'Ibarreta',                         8),
+
+        -- 9 Jujuy
+        (901,  'San Salvador de Jujuy',           9),
+        (902,  'Palpalá',                         9),
+        (903,  'Perico',                          9),
+        (904,  'Libertador General San Martín',   9),
+        (905,  'San Pedro de Jujuy',              9),
+
+        -- 10 La Pampa
+        (1001, 'Santa Rosa',                      10),
+        (1002, 'General Pico',                    10),
+        (1003, 'Toay',                            10),
+        (1004, 'Realicó',                         10),
+        (1005, 'General Acha',                    10),
+
+        -- 11 La Rioja
+        (1101, 'La Rioja',                        11),
+        (1102, 'Chilecito',                       11),
+        (1103, 'Aimogasta',                       11),
+        (1104, 'Chamical',                        11),
+        (1105, 'Chepes',                          11),
+
+        -- 12 Mendoza
+        (1201, 'Mendoza',                         12),
+        (1202, 'Godoy Cruz',                      12),
+        (1203, 'Guaymallén',                      12),
+        (1204, 'Luján de Cuyo',                   12),
+        (1205, 'San Rafael',                      12),
+
+        -- 13 Misiones
+        (1301, 'Posadas',                         13),
+        (1302, 'Oberá',                           13),
+        (1303, 'Eldorado',                        13),
+        (1304, 'Puerto Iguazú',                   13),
+        (1305, 'Apóstoles',                       13),
+
+        -- 14 Neuquén
+        (1401, 'Neuquén',                         14),
+        (1402, 'Plottier',                        14),
+        (1403, 'Centenario',                      14),
+        (1404, 'Cutral Có',                       14),
+        (1405, 'San Martín de los Andes',         14),
+
+        -- 15 Río Negro
+        (1501, 'Viedma',                          15),
+        (1502, 'General Roca',                    15),
+        (1503, 'Cipolletti',                      15),
+        (1504, 'San Carlos de Bariloche',         15),
+        (1505, 'Villa Regina',                    15),
+
+        -- 16 Salta
+        (1601, 'Salta',                           16),
+        (1602, 'San Ramón de la Nueva Orán',      16),
+        (1603, 'Tartagal',                        16),
+        (1604, 'Metán',                           16),
+        (1605, 'Cafayate',                        16),
+
+        -- 17 San Juan
+        (1701, 'San Juan',                        17),
+        (1702, 'Rawson',                          17),
+        (1703, 'Rivadavia',                       17),
+        (1704, 'Chimbas',                         17),
+        (1705, 'Pocito',                          17),
+
+        -- 18 San Luis
+        (1801, 'San Luis',                        18),
+        (1802, 'Villa Mercedes',                  18),
+        (1803, 'Merlo',                           18),
+        (1804, 'La Punta',                        18),
+        (1805, 'Justo Daract',                    18),
+
+        -- 19 Santa Cruz
+        (1901, 'Río Gallegos',                    19),
+        (1902, 'Caleta Olivia',                   19),
+        (1903, 'El Calafate',                     19),
+        (1904, 'Pico Truncado',                   19),
+        (1905, 'Puerto Deseado',                  19),
+
+        -- 20 Santa Fe
+        (2001, 'Santa Fe',                        20),
+        (2002, 'Rosario',                         20),
+        (2003, 'Rafaela',                         20),
+        (2004, 'Venado Tuerto',                   20),
+        (2005, 'Reconquista',                     20),
+
+        -- 21 Santiago del Estero
+        (2101, 'Santiago del Estero',             21),
+        (2102, 'La Banda',                        21),
+        (2103, 'Termas de Río Hondo',             21),
+        (2104, 'Frías',                           21),
+        (2105, 'Añatuya',                         21),
+
+        -- 22 Tierra del Fuego, AIAS
+        (2201, 'Ushuaia',                         22),
+        (2202, 'Río Grande',                      22),
+        (2203, 'Tolhuin',                         22),
+        (2204, 'Puerto Almanza',                  22),
+        (2205, 'San Sebastián',                   22),
+
+        -- 23 Tucumán
+        (2301, 'San Miguel de Tucumán',           23),
+        (2302, 'Tafí Viejo',                      23),
+        (2303, 'Yerba Buena',                     23),
+        (2304, 'Concepción',                      23),
+    (2305, 'Monteros',                        23),
+
+    -- 24 Ciudad Autónoma de Buenos Aires (CABA)
+    (2401, 'Ciudad Autónoma de Buenos Aires', 24),
+    (2402, 'Palermo',                         24),
+    (2403, 'Recoleta',                        24),
+    (2404, 'Belgrano',                        24),
+    (2405, 'Caballito',                       24)
+) AS src(nro_localidad, nom_localidad, cod_provincia)
+ON tgt.nro_localidad = src.nro_localidad
+WHEN MATCHED THEN UPDATE SET tgt.nom_localidad = src.nom_localidad, tgt.cod_provincia = src.cod_provincia
+WHEN NOT MATCHED THEN INSERT (nro_localidad, nom_localidad, cod_provincia)
+VALUES (src.nro_localidad, src.nom_localidad, src.cod_provincia);
+GO
+/* =========================================================
+   FIN SCRIPT
+   ========================================================= */
+
+
+   

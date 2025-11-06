@@ -1,12 +1,12 @@
 /* =========================================================
-   Base de datos: RESTAURANTE 
+   Base de datos: RESTAURANTE COMIDA CHINA
    Motor destino: Microsoft SQL Server (T-SQL)
    ========================================================= */
     
 -- crear y usar la base
-IF DB_ID('RESTAURANTE') IS NULL CREATE DATABASE RESTAURANTE;
+IF DB_ID('RESTAURANTE_COMIDA_CHINA') IS NULL CREATE DATABASE RESTAURANTE_COMIDA_CHINA;
 GO
-USE RESTAURANTE;
+USE RESTAURANTE_COMIDA_CHINA;
 GO
 
 /* =======================
