@@ -485,6 +485,117 @@ WHEN NOT MATCHED THEN INSERT (cod_provincia, nom_provincia)
 VALUES (src.cod_provincia, src.nom_provincia);
 GO
 /* =========================================================
+   SEED: PREFERENCIAS ALIMENTARIAS (normalización)
+   - Categorías: Dieta especial, Intolerancia, Alergia
+   - Dominios: transferidos desde configuración de bodegón
+   - Idioma base: Español (id 1)
+   ========================================================= */
+
+-- Asegurar idioma Español (idempotente)
+MERGE dbo.idiomas AS tgt
+USING (VALUES (1, 'Español', 'es-AR')) AS src(nro_idioma, nom_idioma, cod_idioma)
+ON tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.nom_idioma = src.nom_idioma, tgt.cod_idioma = src.cod_idioma
+WHEN NOT MATCHED THEN INSERT (nro_idioma, nom_idioma, cod_idioma)
+VALUES (src.nro_idioma, src.nom_idioma, src.cod_idioma);
+GO
+-- Alergias adicionales (cat 3)
+MERGE dbo.dominio_categorias_preferencias AS tgt
+USING (
+    VALUES
+        (3, 1, 'Maní'),
+        (3, 2, 'Mariscos'),
+        (3, 3, 'Huevo'),
+        (3, 4, 'Frutos secos'),
+        (3, 5, 'Pescado')
+) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
+WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
+GO
+
+MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
+USING (
+    VALUES
+        (3, 1, 1, 'Maní',         NULL),
+        (3, 2, 1, 'Mariscos',     NULL),
+        (3, 3, 1, 'Huevo',        NULL),
+        (3, 4, 1, 'Frutos secos', NULL),
+        (3, 5, 1, 'Pescado',      NULL)
+) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
+GO
+
+-- Categorías de preferencias
+MERGE dbo.categorias_preferencias AS tgt
+USING (
+    VALUES
+        (1, 'Dieta especial'),
+        (2, 'Intolerancia'),
+        (3, 'Alergia')
+) AS src(cod_categoria, nom_categoria)
+ON tgt.cod_categoria = src.cod_categoria
+WHEN MATCHED THEN UPDATE SET tgt.nom_categoria = src.nom_categoria
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nom_categoria)
+VALUES (src.cod_categoria, src.nom_categoria);
+GO
+
+-- Traducciones de categorías (Español)
+MERGE dbo.idiomas_categorias_preferencias AS tgt
+USING (
+    VALUES
+        (1, 1, 'Dieta especial', NULL),
+        (2, 1, 'Intolerancia',   NULL),
+        (3, 1, 'Alergia',        NULL)
+) AS src(cod_categoria, nro_idioma, categoria, desc_categoria)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.categoria = src.categoria, tgt.desc_categoria = src.desc_categoria
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_idioma, categoria, desc_categoria)
+VALUES (src.cod_categoria, src.nro_idioma, src.categoria, src.desc_categoria);
+GO
+
+-- Dominios por categoría (Intolerancias y Dietas especiales)
+MERGE dbo.dominio_categorias_preferencias AS tgt
+USING (
+    VALUES
+        -- Intolerancias (cat 2)
+        (2, 1, 'Sin TAAC (celíacos)'),
+        (2, 2, 'Sin lactosa'),
+        -- Dietas especiales (cat 1)
+        (1, 1, 'Vegano'),
+        (1, 2, 'Vegetariano'),
+        (1, 3, 'Hiposódico')
+) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
+WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
+GO
+
+-- Traducciones de dominios (Español)
+MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
+USING (
+    VALUES
+        -- Intolerancias (cat 2)
+        (2, 1, 1, 'Sin TAAC (celíacos)', NULL),
+        (2, 2, 1, 'Sin lactosa',         NULL),
+        -- Dietas especiales (cat 1)
+        (1, 1, 1, 'Vegano',              NULL),
+        (1, 2, 1, 'Vegetariano',         NULL),
+        (1, 3, 1, 'Hiposódico',          NULL)
+) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria
+   AND tgt.nro_valor_dominio = src.nro_valor_dominio
+   AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
+GO
+/* =========================================================
    SEED: SINCRONIZACIÓN INICIAL DESDE BODEGÓN (Ristorino)
    Premisas:
    - Sin reservas ni clicks cargados
@@ -785,6 +896,182 @@ GO
 /* =========================================================
    FIN SCRIPT
    ========================================================= */
+/* =========================================================
+   PROCEDIMIENTO: Detalle completo de un restaurante
+   Devuelve JSON anidado con restaurante, sucursales, zonas, turnos,
+   cruce zona-turno, contenidos y configuración (atributos/valores).
+   Uso: EXEC dbo.usp_get_restaurante_detalle @nro_restaurante = 1;
+   ========================================================= */
+IF OBJECT_ID('dbo.usp_get_restaurante_detalle','P') IS NOT NULL
+    DROP PROCEDURE dbo.usp_get_restaurante_detalle;
+GO
+CREATE PROCEDURE dbo.usp_get_restaurante_detalle
+    @nro_restaurante INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        r.nro_restaurante,
+        r.razon_social,
+        r.cuit,
+        config = (
+            SELECT a.cod_atributo, a.nom_atributo, a.tipo_dato, c.valor
+            FROM dbo.configuracion_restaurantes c
+            INNER JOIN dbo.atributos a ON a.cod_atributo = c.cod_atributo
+            WHERE c.nro_restaurante = r.nro_restaurante
+            FOR JSON PATH
+        ),
+        sucursales = (
+            SELECT
+                s.nro_sucursal,
+                s.nom_sucursal,
+                s.calle, s.nro_calle, s.barrio, s.cod_postal, s.telefonos,
+                s.total_comensales, s.min_tolerencia_reserva, s.cod_sucursal_restaurante,
+                localidad = l.nom_localidad,
+                provincia = p.nom_provincia,
+                zonas = (
+                    SELECT
+                        zsr.cod_zona,
+                        zsr.desc_zona,
+                        zsr.cant_comensales,
+                        zsr.permite_menores,
+                        zsr.habilitada,
+                        traducciones = (
+                            SELECT iz.nro_idioma, iz.zona, iz.desc_zona
+                            FROM dbo.idiomas_zonas_suc_restaurantes iz
+                            WHERE iz.nro_restaurante = s.nro_restaurante
+                              AND iz.nro_sucursal = s.nro_sucursal
+                              AND iz.cod_zona = zsr.cod_zona
+                            FOR JSON PATH
+                        ),
+                        turnos = (
+                            SELECT
+                                t.hora_desde, t.hora_hasta, t.habilitado,
+                                cruce_permite_menores = zt.permite_menores
+                            FROM dbo.turnos_sucursales_restaurantes t
+                            LEFT JOIN dbo.zonas_turnos_sucursales_restaurantes zt
+                              ON zt.nro_restaurante = s.nro_restaurante
+                             AND zt.nro_sucursal = s.nro_sucursal
+                             AND zt.cod_zona = zsr.cod_zona
+                             AND zt.hora_desde = t.hora_desde
+                            WHERE t.nro_restaurante = s.nro_restaurante
+                              AND t.nro_sucursal = s.nro_sucursal
+                            FOR JSON PATH
+                        )
+                    FROM dbo.zonas_sucursales_restaurantes zsr
+                    WHERE zsr.nro_restaurante = s.nro_restaurante
+                      AND zsr.nro_sucursal = s.nro_sucursal
+                    FOR JSON PATH
+                ),
+                contenidos = (
+                    SELECT
+                        c.nro_idioma, i.cod_idioma, i.nom_idioma,
+                        c.nro_contenido, c.contenido_promocional, c.imagen_promocional,
+                        c.contenido_a_publicar, c.fecha_ini_vigencia, c.fecha_fin_vigencia,
+                        c.costo_click, c.cod_contenido_restaurante
+                    FROM dbo.contenidos_restaurantes c
+                    INNER JOIN dbo.idiomas i ON i.nro_idioma = c.nro_idioma
+                    WHERE c.nro_restaurante = s.nro_restaurante
+                      AND (c.nro_sucursal = s.nro_sucursal OR c.nro_sucursal IS NULL)
+                    FOR JSON PATH
+                )
+            FROM dbo.sucursales_restaurantes s
+            INNER JOIN dbo.localidades l ON l.nro_localidad = s.nro_localidad
+            INNER JOIN dbo.provincias p ON p.cod_provincia = l.cod_provincia
+            WHERE s.nro_restaurante = r.nro_restaurante
+            FOR JSON PATH
+        )
+    FROM dbo.restaurantes r
+    WHERE r.nro_restaurante = @nro_restaurante
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
+END
+GO
+
+/*prueba de procedimiento*/
+EXEC dbo.usp_get_restaurante_detalle @nro_restaurante = 1;
+GO
 
 
-   
+/* =========================================================
+     PROCEDIMIENTO: Promociones de un restaurante (JSON)
+     Objetivo:
+         Devuelve las promociones/contenidos del restaurante en formato JSON.
+     Parámetros:
+         @nro_restaurante INT (obligatorio)
+         @soloVigentes    BIT = 0  -> Si es 1, filtra por vigencia actual
+         @nro_sucursal    INT = NULL -> Si se indica, trae contenidos de esa sucursal
+                                                                        y también los globales (nro_sucursal IS NULL)
+     Reglas de vigencia (cuando @soloVigentes=1):
+         (fecha_ini_vigencia IS NULL OR CAST(GETDATE() AS DATE) >= fecha_ini_vigencia) AND
+         (fecha_fin_vigencia IS NULL OR CAST(GETDATE() AS DATE) <= fecha_fin_vigencia)
+     Uso:
+         EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1;
+         EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1, @soloVigentes = 1;
+         EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1, @soloVigentes = 1, @nro_sucursal = 2;
+     ========================================================= */
+IF OBJECT_ID('dbo.usp_get_promociones_restaurante','P') IS NOT NULL
+        DROP PROCEDURE dbo.usp_get_promociones_restaurante;
+GO
+CREATE PROCEDURE dbo.usp_get_promociones_restaurante
+        @nro_restaurante INT,
+        @soloVigentes    BIT = 0,
+        @nro_sucursal    INT = NULL
+AS
+BEGIN
+        SET NOCOUNT ON;
+
+        DECLARE @hoy DATE = CAST(GETDATE() AS DATE);
+
+        SELECT
+                r.nro_restaurante,
+                r.razon_social,
+                contenidos = (
+                        SELECT
+                                c.nro_contenido,
+                                c.nro_sucursal,
+                                s.nom_sucursal,
+                                c.nro_idioma,
+                                i.cod_idioma,
+                                i.nom_idioma,
+                                c.contenido_promocional,
+                                c.imagen_promocional,
+                                c.contenido_a_publicar,
+                                c.fecha_ini_vigencia,
+                                c.fecha_fin_vigencia,
+                                c.costo_click,
+                                c.cod_contenido_restaurante,
+                                vigente = CAST(
+                                        CASE WHEN (c.fecha_ini_vigencia IS NULL OR @hoy >= c.fecha_ini_vigencia)
+                                                     AND (c.fecha_fin_vigencia IS NULL OR @hoy <= c.fecha_fin_vigencia)
+                                                 THEN 1 ELSE 0 END AS BIT)
+                        FROM dbo.contenidos_restaurantes c
+                        INNER JOIN dbo.idiomas i
+                                ON i.nro_idioma = c.nro_idioma
+                        LEFT JOIN dbo.sucursales_restaurantes s
+                                ON s.nro_restaurante = c.nro_restaurante
+                             AND s.nro_sucursal = c.nro_sucursal
+                        WHERE c.nro_restaurante = r.nro_restaurante
+                            AND (
+                                        @nro_sucursal IS NULL
+                                        OR c.nro_sucursal = @nro_sucursal
+                                        OR c.nro_sucursal IS NULL
+                                    )
+                            AND (
+                                        @soloVigentes = 0
+                                        OR (
+                                                (c.fecha_ini_vigencia IS NULL OR @hoy >= c.fecha_ini_vigencia)
+                                                AND (c.fecha_fin_vigencia IS NULL OR @hoy <= c.fecha_fin_vigencia)
+                                        )
+                                    )
+                        FOR JSON PATH
+                )
+        FROM dbo.restaurantes r
+        WHERE r.nro_restaurante = @nro_restaurante
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
+END
+GO
+
+/*prueba de procedimiento*/
+EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1;
+GO
