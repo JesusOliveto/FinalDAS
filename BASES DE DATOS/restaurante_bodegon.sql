@@ -263,7 +263,7 @@ CREATE TABLE dbo.clicks_contenidos (
     nro_contenido        INT            NOT NULL,
     nro_click            INT            NOT NULL,
     fecha_hora_registro  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
-    nro_cliente          INT            NOT NULL,
+    nro_cliente          INT            NULL,
     costo_click          DECIMAL(12,2)  NULL,
     CONSTRAINT PK_clicks_contenidos PRIMARY KEY (nro_restaurante, nro_contenido, nro_click),
     CONSTRAINT FK_clicks_contenidos_contenidos
@@ -296,10 +296,10 @@ GO
 CREATE PROCEDURE dbo.usp_registrar_click_contenido
     @nro_restaurante INT,
     @nro_contenido   INT,
-    @nro_cliente     INT = NULL,              -- opcional: si se pasa y existe se usa; si no existe se crea
-    @apellido        VARCHAR(120),            -- requerido para alta si cliente no existe
-    @nombre          VARCHAR(120),            -- requerido para alta si cliente no existe
-    @correo          VARCHAR(200),            -- clave única de búsqueda / alta
+    @nro_cliente     INT = NULL,              -- opcional: si se pasa y existe se usa; admite NULL (click anónimo)
+    @apellido        VARCHAR(120) = NULL,     -- opcional; requerido solo si se va a crear cliente
+    @nombre          VARCHAR(120) = NULL,     -- opcional; requerido solo si se va a crear cliente
+    @correo          VARCHAR(200) = NULL,     -- opcional; clave natural para localizar/crear
     @telefonos       VARCHAR(120) = NULL,     -- opcional
     @costo_click     DECIMAL(12,2) = NULL,
     @fecha_registro  DATETIME2(0) = NULL
@@ -323,39 +323,58 @@ BEGIN
             ROLLBACK TRAN; RETURN;
         END;
 
-        -- Resolver/crear cliente
+        -- Resolver/crear cliente (opcional). Si no hay datos -> click anónimo.
         DECLARE @cliente_resuelto INT = NULL;
 
-        IF @nro_cliente IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.clientes WHERE nro_cliente=@nro_cliente)
+        IF @nro_cliente IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.clientes WHERE nro_cliente = @nro_cliente)
         BEGIN
             SET @cliente_resuelto = @nro_cliente;
-            -- opcional: actualizar datos básicos si vinieron distintos
-            UPDATE c SET apellido=@apellido, nombre=@nombre, telefonos=@telefonos
-            FROM dbo.clientes c
-            WHERE c.nro_cliente = @cliente_resuelto
-              AND (c.apellido<>@apellido OR c.nombre<>@nombre OR ISNULL(c.telefonos,'')<>ISNULL(@telefonos,''));
+            -- Actualizar datos básicos si fueron provistos y cambiaron
+            IF @apellido IS NOT NULL OR @nombre IS NOT NULL OR @telefonos IS NOT NULL
+            BEGIN
+                UPDATE c
+                   SET apellido = COALESCE(@apellido, c.apellido),
+                       nombre   = COALESCE(@nombre,   c.nombre),
+                       telefonos= COALESCE(@telefonos,c.telefonos)
+                 FROM dbo.clientes c
+                WHERE c.nro_cliente = @cliente_resuelto
+                  AND (
+                        (@apellido IS NOT NULL AND c.apellido<>@apellido)
+                     OR (@nombre   IS NOT NULL AND c.nombre<>@nombre)
+                     OR (@telefonos IS NOT NULL AND ISNULL(c.telefonos,'')<>ISNULL(@telefonos,''))
+                  );
+            END
         END
-        ELSE
+        ELSE IF @correo IS NOT NULL
         BEGIN
             -- Buscar por correo existente
             SELECT @cliente_resuelto = nro_cliente FROM dbo.clientes WHERE correo = @correo;
 
-            IF @cliente_resuelto IS NULL
+            IF @cliente_resuelto IS NULL AND @apellido IS NOT NULL AND @nombre IS NOT NULL
             BEGIN
-                -- Crear nuevo cliente
+                -- Crear nuevo cliente solo si hay datos mínimos
                 SELECT @cliente_resuelto = ISNULL(MAX(nro_cliente),0) + 1 FROM dbo.clientes WITH (TABLOCKX);
                 INSERT INTO dbo.clientes (nro_cliente, apellido, nombre, correo, telefonos)
                 VALUES (@cliente_resuelto, @apellido, @nombre, @correo, @telefonos);
             END
-            ELSE
+            ELSE IF @cliente_resuelto IS NOT NULL
             BEGIN
-                -- Actualizar datos si cambiaron
-                UPDATE dbo.clientes
-                   SET apellido=@apellido, nombre=@nombre, telefonos=@telefonos
-                 WHERE nro_cliente=@cliente_resuelto
-                   AND (apellido<>@apellido OR nombre<>@nombre OR ISNULL(telefonos,'')<>ISNULL(@telefonos,''));
+                -- Actualizar datos si cambiaron (solo los provistos)
+                UPDATE c
+                   SET apellido = COALESCE(@apellido, c.apellido),
+                       nombre   = COALESCE(@nombre,   c.nombre),
+                       telefonos= COALESCE(@telefonos,c.telefonos)
+                 FROM dbo.clientes c
+                WHERE c.nro_cliente = @cliente_resuelto
+                  AND (
+                        (@apellido IS NOT NULL AND c.apellido<>@apellido)
+                     OR (@nombre   IS NOT NULL AND c.nombre<>@nombre)
+                     OR (@telefonos IS NOT NULL AND ISNULL(c.telefonos,'')<>ISNULL(@telefonos,''))
+                  );
             END
+            -- Si no hay datos suficientes para alta, se mantiene anónimo
         END
+        -- Si no se pudo resolver cliente: se registra click anónimo (nro_cliente NULL)
 
         -- Obtener siguiente nro_click
         DECLARE @nro_click INT = 1;
@@ -375,7 +394,7 @@ BEGIN
         COMMIT TRAN;
 
         SELECT
-            click = (
+            click = JSON_QUERY((
                 SELECT
                     @nro_restaurante AS nro_restaurante,
                     @nro_contenido   AS nro_contenido,
@@ -383,12 +402,12 @@ BEGIN
                     @fecha_registro  AS fecha_hora_registro,
                     @costo_click     AS costo_click
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-            ),
-            cliente = (
+            )),
+            cliente = JSON_QUERY((
                 SELECT nro_cliente, apellido, nombre, correo, telefonos
                 FROM dbo.clientes WHERE nro_cliente = @cliente_resuelto
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-            )
+            ))
         FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
     END TRY
     BEGIN CATCH
@@ -616,3 +635,5 @@ INSERT INTO dbo.estilos_sucursales (nro_restaurante, nro_sucursal, nro_estilo, h
 -- NOTA: No se insertan clientes, reservas ni clicks según requisitos
 
 
+--SELECT PARA MOSTRAR LOS CLICKS REGISTRADOS 
+SELECT * FROM dbo.clicks_contenidos;
