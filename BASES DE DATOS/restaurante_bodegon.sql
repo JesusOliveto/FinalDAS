@@ -158,7 +158,8 @@ CREATE TABLE dbo.turnos_sucursales (
     CONSTRAINT FK_turnos_sucursales_sucursales
         FOREIGN KEY (nro_restaurante, nro_sucursal)
         REFERENCES dbo.sucursales (nro_restaurante, nro_sucursal),
-    CONSTRAINT CK_turnos_rango_valido CHECK (hora_desde < hora_hasta)
+    -- Permitir turnos que cruzan medianoche (ej: 23:00 -> 02:00) evitando solo igualdad
+    CONSTRAINT CK_turnos_rango_valido CHECK (hora_desde <> hora_hasta)
 );
 
 CREATE TABLE dbo.zonas_turnos_sucursales (
@@ -272,6 +273,140 @@ CREATE TABLE dbo.clicks_contenidos (
         FOREIGN KEY (nro_cliente) REFERENCES dbo.clientes (nro_cliente)
 );
 
+/* =========================================================
+   PROCEDIMIENTO: Registrar click de contenido
+   Uso previsto: API REST del Bodegón consumida por Ristorino
+   Objetivo: Insertar un click evitando colisiones y devolviendo datos útiles.
+   Parámetros:
+       @nro_restaurante INT
+       @nro_contenido   INT
+       @nro_cliente     INT            -- cliente origen del click (puede ser proxy)
+       @costo_click     DECIMAL(12,2) = NULL  -- costo recibido desde Ristorino (override)
+       @fecha_registro  DATETIME2(0) = NULL   -- si NULL usa SYSDATETIME()
+   Lógica:
+       - Verifica que contenido exista y esté publicado (opcional, si se quiere validar publicado=1)
+       - Genera nro_click incremental por contenido
+       - Inserta fila y retorna JSON con los datos del click
+   Respuesta JSON:
+       {"nro_restaurante":1,"nro_contenido":4,"nro_click":12,"fecha_hora_registro":"2025-11-07T12:34:00","costo_click":40.00}
+   ========================================================= */
+IF OBJECT_ID('dbo.usp_registrar_click_contenido','P') IS NOT NULL
+    DROP PROCEDURE dbo.usp_registrar_click_contenido;
+GO
+CREATE PROCEDURE dbo.usp_registrar_click_contenido
+    @nro_restaurante INT,
+    @nro_contenido   INT,
+    @nro_cliente     INT = NULL,              -- opcional: si se pasa y existe se usa; si no existe se crea
+    @apellido        VARCHAR(120),            -- requerido para alta si cliente no existe
+    @nombre          VARCHAR(120),            -- requerido para alta si cliente no existe
+    @correo          VARCHAR(200),            -- clave única de búsqueda / alta
+    @telefonos       VARCHAR(120) = NULL,     -- opcional
+    @costo_click     DECIMAL(12,2) = NULL,
+    @fecha_registro  DATETIME2(0) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @ahora DATETIME2(0) = SYSDATETIME();
+    IF @fecha_registro IS NULL SET @fecha_registro = @ahora;
+
+    BEGIN TRY
+        BEGIN TRAN;
+
+        -- Validar contenido
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.contenidos c
+            WHERE c.nro_restaurante = @nro_restaurante
+              AND c.nro_contenido   = @nro_contenido
+        )
+        BEGIN
+            RAISERROR('Contenido inexistente para el restaurante.', 16, 1);
+            ROLLBACK TRAN; RETURN;
+        END;
+
+        -- Resolver/crear cliente
+        DECLARE @cliente_resuelto INT = NULL;
+
+        IF @nro_cliente IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.clientes WHERE nro_cliente=@nro_cliente)
+        BEGIN
+            SET @cliente_resuelto = @nro_cliente;
+            -- opcional: actualizar datos básicos si vinieron distintos
+            UPDATE c SET apellido=@apellido, nombre=@nombre, telefonos=@telefonos
+            FROM dbo.clientes c
+            WHERE c.nro_cliente = @cliente_resuelto
+              AND (c.apellido<>@apellido OR c.nombre<>@nombre OR ISNULL(c.telefonos,'')<>ISNULL(@telefonos,''));
+        END
+        ELSE
+        BEGIN
+            -- Buscar por correo existente
+            SELECT @cliente_resuelto = nro_cliente FROM dbo.clientes WHERE correo = @correo;
+
+            IF @cliente_resuelto IS NULL
+            BEGIN
+                -- Crear nuevo cliente
+                SELECT @cliente_resuelto = ISNULL(MAX(nro_cliente),0) + 1 FROM dbo.clientes WITH (TABLOCKX);
+                INSERT INTO dbo.clientes (nro_cliente, apellido, nombre, correo, telefonos)
+                VALUES (@cliente_resuelto, @apellido, @nombre, @correo, @telefonos);
+            END
+            ELSE
+            BEGIN
+                -- Actualizar datos si cambiaron
+                UPDATE dbo.clientes
+                   SET apellido=@apellido, nombre=@nombre, telefonos=@telefonos
+                 WHERE nro_cliente=@cliente_resuelto
+                   AND (apellido<>@apellido OR nombre<>@nombre OR ISNULL(telefonos,'')<>ISNULL(@telefonos,''));
+            END
+        END
+
+        -- Obtener siguiente nro_click
+        DECLARE @nro_click INT = 1;
+        SELECT @nro_click = ISNULL(MAX(nro_click),0) + 1
+        FROM dbo.clicks_contenidos
+        WHERE nro_restaurante = @nro_restaurante
+          AND nro_contenido   = @nro_contenido;
+
+        INSERT INTO dbo.clicks_contenidos (
+            nro_restaurante, nro_contenido, nro_click,
+            fecha_hora_registro, nro_cliente, costo_click
+        ) VALUES (
+            @nro_restaurante, @nro_contenido, @nro_click,
+            @fecha_registro, @cliente_resuelto, @costo_click
+        );
+
+        COMMIT TRAN;
+
+        SELECT
+            click = (
+                SELECT
+                    @nro_restaurante AS nro_restaurante,
+                    @nro_contenido   AS nro_contenido,
+                    @nro_click       AS nro_click,
+                    @fecha_registro  AS fecha_hora_registro,
+                    @costo_click     AS costo_click
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            ),
+            cliente = (
+                SELECT nro_cliente, apellido, nombre, correo, telefonos
+                FROM dbo.clientes WHERE nro_cliente = @cliente_resuelto
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+        DECLARE @msg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@msg,16,1);
+    END CATCH
+END
+GO
+
+/* Ejemplo de ejecución
+EXEC dbo.usp_registrar_click_contenido
+    @nro_restaurante = 1,
+    @nro_contenido   = 4,
+    @nro_cliente     = 1001,      -- asumir cliente precargado
+    @costo_click     = 42.50;     -- opcional
+*/
+
 /* =======================
    Reservas
    ======================= */
@@ -335,7 +470,7 @@ INSERT INTO dbo.provincias (cod_provincia, nom_provincia) VALUES
     (5, 'Córdoba');
 
 INSERT INTO dbo.localidades (nro_localidad, nom_localidad, cod_provincia) VALUES
-    (501, 'Córdoba', 5),
+    (501, 'Córdoba', 5);
 
 -- Restaurante
 INSERT INTO dbo.restaurantes (nro_restaurante, razon_social, cuit) VALUES
@@ -479,3 +614,5 @@ INSERT INTO dbo.estilos_sucursales (nro_restaurante, nro_sucursal, nro_estilo, h
     (1,3,1,1),(1,3,3,1);
 
 -- NOTA: No se insertan clientes, reservas ni clicks según requisitos
+
+

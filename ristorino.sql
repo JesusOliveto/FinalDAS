@@ -257,7 +257,7 @@ CREATE TABLE dbo.turnos_sucursales_restaurantes (
     CONSTRAINT PK_turnos_suc_rest PRIMARY KEY (nro_restaurante, nro_sucursal, hora_desde),
     CONSTRAINT FK_turnos_suc_rest_sucursal FOREIGN KEY (nro_restaurante, nro_sucursal)
         REFERENCES dbo.sucursales_restaurantes(nro_restaurante, nro_sucursal),
-    CONSTRAINT CK_turnos_rango_valido CHECK (hora_desde < hora_hasta)
+    CONSTRAINT CK_turnos_rango_valido CHECK (hora_desde <> hora_hasta)
 );
 
 CREATE TABLE dbo.zonas_sucursales_restaurantes (
@@ -484,238 +484,6 @@ WHEN MATCHED THEN UPDATE SET tgt.nom_provincia = src.nom_provincia
 WHEN NOT MATCHED THEN INSERT (cod_provincia, nom_provincia)
 VALUES (src.cod_provincia, src.nom_provincia);
 GO
-/* =========================================================
-   SEED: PREFERENCIAS ALIMENTARIAS (normalización)
-   - Categorías: Dieta especial, Intolerancia, Alergia
-   - Dominios: transferidos desde configuración de bodegón
-   - Idioma base: Español (id 1)
-   ========================================================= */
-
--- Asegurar idioma Español (idempotente)
-MERGE dbo.idiomas AS tgt
-USING (VALUES (1, 'Español', 'es-AR')) AS src(nro_idioma, nom_idioma, cod_idioma)
-ON tgt.nro_idioma = src.nro_idioma
-WHEN MATCHED THEN UPDATE SET tgt.nom_idioma = src.nom_idioma, tgt.cod_idioma = src.cod_idioma
-WHEN NOT MATCHED THEN INSERT (nro_idioma, nom_idioma, cod_idioma)
-VALUES (src.nro_idioma, src.nom_idioma, src.cod_idioma);
-GO
--- Alergias adicionales (cat 3)
-MERGE dbo.dominio_categorias_preferencias AS tgt
-USING (
-    VALUES
-        (3, 1, 'Maní'),
-        (3, 2, 'Mariscos'),
-        (3, 3, 'Huevo'),
-        (3, 4, 'Frutos secos'),
-        (3, 5, 'Pescado')
-) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
-ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
-WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
-VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
-GO
-
-MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
-USING (
-    VALUES
-        (3, 1, 1, 'Maní',         NULL),
-        (3, 2, 1, 'Mariscos',     NULL),
-        (3, 3, 1, 'Huevo',        NULL),
-        (3, 4, 1, 'Frutos secos', NULL),
-        (3, 5, 1, 'Pescado',      NULL)
-) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
-ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio AND tgt.nro_idioma = src.nro_idioma
-WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
-VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
-GO
-
--- Categorías de preferencias
-MERGE dbo.categorias_preferencias AS tgt
-USING (
-    VALUES
-        (1, 'Dieta especial'),
-        (2, 'Intolerancia'),
-        (3, 'Alergia')
-) AS src(cod_categoria, nom_categoria)
-ON tgt.cod_categoria = src.cod_categoria
-WHEN MATCHED THEN UPDATE SET tgt.nom_categoria = src.nom_categoria
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nom_categoria)
-VALUES (src.cod_categoria, src.nom_categoria);
-GO
-
--- Traducciones de categorías (Español)
-MERGE dbo.idiomas_categorias_preferencias AS tgt
-USING (
-    VALUES
-        (1, 1, 'Dieta especial', NULL),
-        (2, 1, 'Intolerancia',   NULL),
-        (3, 1, 'Alergia',        NULL)
-) AS src(cod_categoria, nro_idioma, categoria, desc_categoria)
-ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_idioma = src.nro_idioma
-WHEN MATCHED THEN UPDATE SET tgt.categoria = src.categoria, tgt.desc_categoria = src.desc_categoria
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_idioma, categoria, desc_categoria)
-VALUES (src.cod_categoria, src.nro_idioma, src.categoria, src.desc_categoria);
-GO
-
--- Dominios por categoría (Intolerancias y Dietas especiales)
-MERGE dbo.dominio_categorias_preferencias AS tgt
-USING (
-    VALUES
-        -- Intolerancias (cat 2)
-        (2, 1, 'Sin TAAC (celíacos)'),
-        (2, 2, 'Sin lactosa'),
-        -- Dietas especiales (cat 1)
-        (1, 1, 'Vegano'),
-        (1, 2, 'Vegetariano'),
-        (1, 3, 'Hiposódico')
-) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
-ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
-WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
-VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
-GO
-
--- Traducciones de dominios (Español)
-MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
-USING (
-    VALUES
-        -- Intolerancias (cat 2)
-        (2, 1, 1, 'Sin TAAC (celíacos)', NULL),
-        (2, 2, 1, 'Sin lactosa',         NULL),
-        -- Dietas especiales (cat 1)
-        (1, 1, 1, 'Vegano',              NULL),
-        (1, 2, 1, 'Vegetariano',         NULL),
-        (1, 3, 1, 'Hiposódico',          NULL)
-) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
-ON tgt.cod_categoria = src.cod_categoria
-   AND tgt.nro_valor_dominio = src.nro_valor_dominio
-   AND tgt.nro_idioma = src.nro_idioma
-WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
-WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
-VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
-GO
-/* =========================================================
-   SEED: SINCRONIZACIÓN INICIAL DESDE BODEGÓN (Ristorino)
-   Premisas:
-   - Sin reservas ni clicks cargados
-   - Único idioma: Español (es-AR)
-   - Sin clientes cargados
-   - Atributos + Configuración: diseño invertido (catálogos del restaurante como atributos/valores)
-   ========================================================= */
-
--- Idioma base (Español)
-INSERT INTO dbo.idiomas (nro_idioma, nom_idioma, cod_idioma)
-VALUES (1, 'Español', 'es-AR');
-GO
-
--- Restaurante comunicado: Bodegón La Esquina
-INSERT INTO dbo.restaurantes (nro_restaurante, razon_social, cuit)
-VALUES (1, 'Bodegón La Esquina', '30-71234567-8');
-GO
-
--- Sucursales del Bodegón (localidad Córdoba: 501)
-INSERT INTO dbo.sucursales_restaurantes (
-    nro_restaurante, nro_sucursal, nom_sucursal, calle, nro_calle, barrio, nro_localidad,
-    cod_postal, telefonos, total_comensales, min_tolerencia_reserva, cod_sucursal_restaurante
-) VALUES
-    (1, 1, 'Av. Colón',        'Av. Colón',        3450, 'Alta Córdoba',       501, '5000', '+54 351 555-0101', 120, 15, 'COLON'),
-    (1, 2, 'Bv. San Juan',     'Bv. San Juan',      950, 'Centro',             501, '5000', '+54 351 555-0202',  90, 15, 'SANJUAN'),
-    (1, 3, 'Av. Rafael Núñez', 'Av. Rafael Núñez', 5235, 'Cerro de las Rosas', 501, '5009', '+54 351 555-0303',  80, 15, 'RAFANUNEZ');
-GO
-
--- Zonas habilitadas por sucursal (capacidad por zona reducida 10..20)
-INSERT INTO dbo.zonas_sucursales_restaurantes (
-    nro_restaurante, nro_sucursal, cod_zona, desc_zona, cant_comensales, permite_menores, habilitada
-) VALUES
-    -- Sucursal 1
-    (1, 1, 1, 'Salón Principal', 20, 1, 1),
-    (1, 1, 2, 'Patio Interno',   18, 1, 1),
-    (1, 1, 3, 'Terraza',         16, 1, 1),
-    (1, 1, 4, 'Exterior',        12, 1, 1),
-    -- Sucursal 2
-    (1, 2, 1, 'Salón Principal', 20, 1, 1),
-    (1, 2, 2, 'Patio Interno',   16, 1, 1),
-    (1, 2, 4, 'Exterior',        12, 1, 1),
-    -- Sucursal 3
-    (1, 3, 1, 'Salón Principal', 18, 1, 1),
-    (1, 3, 2, 'Patio Interno',   16, 1, 1),
-    (1, 3, 5, 'Ala Norte',       15, 1, 1);
-GO
-
--- Traducciones de zonas (Español)
-INSERT INTO dbo.idiomas_zonas_suc_restaurantes (
-    nro_restaurante, nro_sucursal, cod_zona, nro_idioma, zona, desc_zona
-) VALUES
-    (1,1,1,1,'Salón Principal', NULL),
-    (1,1,2,1,'Patio Interno',   NULL),
-    (1,1,3,1,'Terraza',         NULL),
-    (1,1,4,1,'Exterior',        NULL),
-    (1,2,1,1,'Salón Principal', NULL),
-    (1,2,2,1,'Patio Interno',   NULL),
-    (1,2,4,1,'Exterior',        NULL),
-    (1,3,1,1,'Salón Principal', NULL),
-    (1,3,2,1,'Patio Interno',   NULL),
-    (1,3,5,1,'Ala Norte',       NULL);
-GO
-
--- Turnos por sucursal (5 turnos, 3 horas)
-INSERT INTO dbo.turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, hora_desde, hora_hasta, habilitado) VALUES
-    -- Sucursal 1
-    (1,1,'11:00','14:00',1), (1,1,'14:00','17:00',1), (1,1,'17:00','20:00',1), (1,1,'20:00','23:00',1), (1,1,'23:00','02:00',1),
-    -- Sucursal 2
-    (1,2,'11:00','14:00',1), (1,2,'14:00','17:00',1), (1,2,'17:00','20:00',1), (1,2,'20:00','23:00',1), (1,2,'23:00','02:00',1),
-    -- Sucursal 3
-    (1,3,'11:00','14:00',1), (1,3,'14:00','17:00',1), (1,3,'17:00','20:00',1), (1,3,'20:00','23:00',1), (1,3,'23:00','02:00',1);
-GO
-
--- Cruce Zonas x Turnos (permite menores = 1)
-INSERT INTO dbo.zonas_turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, cod_zona, hora_desde, permite_menores) VALUES
-    -- Sucursal 1
-    (1,1,1,'11:00',1),(1,1,1,'14:00',1),(1,1,1,'17:00',1),(1,1,1,'20:00',1),(1,1,1,'23:00',1),
-    (1,1,2,'11:00',1),(1,1,2,'14:00',1),(1,1,2,'17:00',1),(1,1,2,'20:00',1),(1,1,2,'23:00',1),
-    (1,1,3,'11:00',1),(1,1,3,'14:00',1),(1,1,3,'17:00',1),(1,1,3,'20:00',1),(1,1,3,'23:00',1),
-    (1,1,4,'11:00',1),(1,1,4,'14:00',1),(1,1,4,'17:00',1),(1,1,4,'20:00',1),(1,1,4,'23:00',1),
-    -- Sucursal 2
-    (1,2,1,'11:00',1),(1,2,1,'14:00',1),(1,2,1,'17:00',1),(1,2,1,'20:00',1),(1,2,1,'23:00',1),
-    (1,2,2,'11:00',1),(1,2,2,'14:00',1),(1,2,2,'17:00',1),(1,2,2,'20:00',1),(1,2,2,'23:00',1),
-    (1,2,4,'11:00',1),(1,2,4,'14:00',1),(1,2,4,'17:00',1),(1,2,4,'20:00',1),(1,2,4,'23:00',1),
-    -- Sucursal 3
-    (1,3,1,'11:00',1),(1,3,1,'14:00',1),(1,3,1,'17:00',1),(1,3,1,'20:00',1),(1,3,1,'23:00',1),
-    (1,3,2,'11:00',1),(1,3,2,'14:00',1),(1,3,2,'17:00',1),(1,3,2,'20:00',1),(1,3,2,'23:00',1),
-    (1,3,5,'11:00',1),(1,3,5,'14:00',1),(1,3,5,'17:00',1),(1,3,5,'20:00',1),(1,3,5,'23:00',1);
-GO
-
--- Contenidos sincronizados (Español)
-INSERT INTO dbo.contenidos_restaurantes (
-    nro_restaurante, nro_idioma, nro_contenido, nro_sucursal,
-    contenido_promocional, imagen_promocional, contenido_a_publicar,
-    fecha_ini_vigencia, fecha_fin_vigencia, costo_click, cod_contenido_restaurante
-) VALUES
-    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', NULL, 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
-    (1,1,2, NULL, 'Finde Asado para compartir',   NULL, 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
-    (1,1,3, NULL, 'Martes 2x1 Empanadas',         NULL, '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
-    (1,1,4, 1,    'Lomito completo + papas',      NULL, 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
-    (1,1,5, 3,    'Pollo a las brasas al peso',   NULL, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
-GO
-
--- Diseño invertido: Atributos que representan catálogos del restaurante
-INSERT INTO dbo.atributos (cod_atributo, nom_atributo, tipo_dato) VALUES
-    (1, 'tipos_comidas', 'JSON'),
-    (2, 'preferencias_alimentarias', 'JSON'),
-    (3, 'estilos', 'JSON'),
-    (4, 'zonas', 'JSON');
-GO
-
--- Configuración del restaurante (valores como JSON)
-INSERT INTO dbo.configuracion_restaurantes (nro_restaurante, cod_atributo, valor) VALUES
-    (1, 1, '["Pastas","Pizzas","Lomitos","Minutas","Parrilla","Empanadas","Pollo a las brasas"]'),
-    (1, 2, '["Sin TAAC (celíacos)","Vegano","Vegetariano","Sin lactosa","Hiposódico"]'),
-    (1, 3, '["Argentina","Italiana","Parrilla","Rotisería"]'),
-    (1, 4, '["Salón Principal","Patio Interno","Terraza","Exterior","Ala Norte"]');
-GO
-
-
 -- Localidades principales (5 por provincia)
 MERGE dbo.localidades AS tgt
 USING (
@@ -879,20 +647,250 @@ USING (
         (2302, 'Tafí Viejo',                      23),
         (2303, 'Yerba Buena',                     23),
         (2304, 'Concepción',                      23),
-    (2305, 'Monteros',                        23),
+        (2305, 'Monteros',                        23),
 
-    -- 24 Ciudad Autónoma de Buenos Aires (CABA)
-    (2401, 'Ciudad Autónoma de Buenos Aires', 24),
-    (2402, 'Palermo',                         24),
-    (2403, 'Recoleta',                        24),
-    (2404, 'Belgrano',                        24),
-    (2405, 'Caballito',                       24)
+        -- 24 Ciudad Autónoma de Buenos Aires (CABA)
+        (2401, 'Ciudad Autónoma de Buenos Aires', 24),
+        (2402, 'Palermo',                         24),
+        (2403, 'Recoleta',                        24),
+        (2404, 'Belgrano',                        24),
+        (2405, 'Caballito',                       24)
 ) AS src(nro_localidad, nom_localidad, cod_provincia)
 ON tgt.nro_localidad = src.nro_localidad
 WHEN MATCHED THEN UPDATE SET tgt.nom_localidad = src.nom_localidad, tgt.cod_provincia = src.cod_provincia
 WHEN NOT MATCHED THEN INSERT (nro_localidad, nom_localidad, cod_provincia)
 VALUES (src.nro_localidad, src.nom_localidad, src.cod_provincia);
 GO
+/* =========================================================
+   SEED: PREFERENCIAS ALIMENTARIAS (normalización)
+   - Categorías: Dieta especial, Intolerancia, Alergia
+   - Dominios: transferidos desde configuración de bodegón
+   - Idioma base: Español (id 1)
+   ========================================================= */
+
+-- Asegurar idioma Español (idempotente)
+MERGE dbo.idiomas AS tgt
+USING (VALUES (1, 'Español', 'es-AR')) AS src(nro_idioma, nom_idioma, cod_idioma)
+ON tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.nom_idioma = src.nom_idioma, tgt.cod_idioma = src.cod_idioma
+WHEN NOT MATCHED THEN INSERT (nro_idioma, nom_idioma, cod_idioma)
+VALUES (src.nro_idioma, src.nom_idioma, src.cod_idioma);
+GO
+-- Alergias adicionales (cat 3)
+
+-- Categorías de preferencias
+MERGE dbo.categorias_preferencias AS tgt
+USING (
+    VALUES
+        (1, 'Dieta especial'),
+        (2, 'Intolerancia'),
+        (3, 'Alergia')
+) AS src(cod_categoria, nom_categoria)
+ON tgt.cod_categoria = src.cod_categoria
+WHEN MATCHED THEN UPDATE SET tgt.nom_categoria = src.nom_categoria
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nom_categoria)
+VALUES (src.cod_categoria, src.nom_categoria);
+GO
+
+-- Traducciones de categorías (Español)
+MERGE dbo.idiomas_categorias_preferencias AS tgt
+USING (
+    VALUES
+        (1, 1, 'Dieta especial', NULL),
+        (2, 1, 'Intolerancia',   NULL),
+        (3, 1, 'Alergia',        NULL)
+) AS src(cod_categoria, nro_idioma, categoria, desc_categoria)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.categoria = src.categoria, tgt.desc_categoria = src.desc_categoria
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_idioma, categoria, desc_categoria)
+VALUES (src.cod_categoria, src.nro_idioma, src.categoria, src.desc_categoria);
+GO
+
+-- Dominios por categoría (Intolerancias y Dietas especiales)
+MERGE dbo.dominio_categorias_preferencias AS tgt
+USING (
+    VALUES
+        -- Intolerancias (cat 2)
+        (2, 1, 'Sin TAAC (celíacos)'),
+        (2, 2, 'Sin lactosa'),
+        -- Dietas especiales (cat 1)
+        (1, 1, 'Vegano'),
+        (1, 2, 'Vegetariano'),
+        (1, 3, 'Hiposódico')
+) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
+WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
+GO
+
+-- Traducciones de dominios (Español)
+MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
+USING (
+    VALUES
+        -- Intolerancias (cat 2)
+        (2, 1, 1, 'Sin TAAC (celíacos)', NULL),
+        (2, 2, 1, 'Sin lactosa',         NULL),
+        -- Dietas especiales (cat 1)
+        (1, 1, 1, 'Vegano',              NULL),
+        (1, 2, 1, 'Vegetariano',         NULL),
+        (1, 3, 1, 'Hiposódico',          NULL)
+) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria
+   AND tgt.nro_valor_dominio = src.nro_valor_dominio
+   AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
+GO
+-- Alergias adicionales (cat 3)
+MERGE dbo.dominio_categorias_preferencias AS tgt
+USING (
+    VALUES
+        (3, 1, 'Maní'),
+        (3, 2, 'Mariscos'),
+        (3, 3, 'Huevo'),
+        (3, 4, 'Frutos secos'),
+        (3, 5, 'Pescado')
+) AS src(cod_categoria, nro_valor_dominio, nom_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio
+WHEN MATCHED THEN UPDATE SET tgt.nom_valor_dominio = src.nom_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nom_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nom_valor_dominio);
+GO
+
+MERGE dbo.idiomas_dominio_cat_preferencias AS tgt
+USING (
+    VALUES
+        (3, 1, 1, 'Maní',         NULL),
+        (3, 2, 1, 'Mariscos',     NULL),
+        (3, 3, 1, 'Huevo',        NULL),
+        (3, 4, 1, 'Frutos secos', NULL),
+        (3, 5, 1, 'Pescado',      NULL)
+) AS src(cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+ON tgt.cod_categoria = src.cod_categoria AND tgt.nro_valor_dominio = src.nro_valor_dominio AND tgt.nro_idioma = src.nro_idioma
+WHEN MATCHED THEN UPDATE SET tgt.valor_dominio = src.valor_dominio, tgt.desc_valor_dominio = src.desc_valor_dominio
+WHEN NOT MATCHED THEN INSERT (cod_categoria, nro_valor_dominio, nro_idioma, valor_dominio, desc_valor_dominio)
+VALUES (src.cod_categoria, src.nro_valor_dominio, src.nro_idioma, src.valor_dominio, src.desc_valor_dominio);
+GO
+/* =========================================================
+   SEED: SINCRONIZACIÓN INICIAL DESDE BODEGÓN (Ristorino)
+   Premisas:
+   - Sin reservas ni clicks cargados
+   - Único idioma: Español (es-AR)
+   - Sin clientes cargados
+   - Atributos + Configuración: diseño invertido (catálogos del restaurante como atributos/valores)
+   ========================================================= */
+
+-- Idioma base ya garantizado arriba mediante MERGE (evita duplicados)
+
+-- Restaurante comunicado: Bodegón La Esquina
+INSERT INTO dbo.restaurantes (nro_restaurante, razon_social, cuit)
+VALUES (1, 'Bodegón La Esquina', '30-71234567-8');
+GO
+
+-- Sucursales del Bodegón (localidad Córdoba: 501)
+INSERT INTO dbo.sucursales_restaurantes (
+    nro_restaurante, nro_sucursal, nom_sucursal, calle, nro_calle, barrio, nro_localidad,
+    cod_postal, telefonos, total_comensales, min_tolerencia_reserva, cod_sucursal_restaurante
+) VALUES
+    (1, 1, 'Av. Colón',        'Av. Colón',        3450, 'Alta Córdoba',       501, '5000', '+54 351 555-0101', 120, 15, 'COLON'),
+    (1, 2, 'Bv. San Juan',     'Bv. San Juan',      950, 'Centro',             501, '5000', '+54 351 555-0202',  90, 15, 'SANJUAN'),
+    (1, 3, 'Av. Rafael Núñez', 'Av. Rafael Núñez', 5235, 'Cerro de las Rosas', 501, '5009', '+54 351 555-0303',  80, 15, 'RAFANUNEZ');
+GO
+
+-- Zonas habilitadas por sucursal (capacidad por zona reducida 10..20)
+INSERT INTO dbo.zonas_sucursales_restaurantes (
+    nro_restaurante, nro_sucursal, cod_zona, desc_zona, cant_comensales, permite_menores, habilitada
+) VALUES
+    -- Sucursal 1
+    (1, 1, 1, 'Salón Principal', 20, 1, 1),
+    (1, 1, 2, 'Patio Interno',   18, 1, 1),
+    (1, 1, 3, 'Terraza',         16, 1, 1),
+    (1, 1, 4, 'Exterior',        12, 1, 1),
+    -- Sucursal 2
+    (1, 2, 1, 'Salón Principal', 20, 1, 1),
+    (1, 2, 2, 'Patio Interno',   16, 1, 1),
+    (1, 2, 4, 'Exterior',        12, 1, 1),
+    -- Sucursal 3
+    (1, 3, 1, 'Salón Principal', 18, 1, 1),
+    (1, 3, 2, 'Patio Interno',   16, 1, 1),
+    (1, 3, 5, 'Ala Norte',       15, 1, 1);
+GO
+
+-- Traducciones de zonas (Español)
+INSERT INTO dbo.idiomas_zonas_suc_restaurantes (
+    nro_restaurante, nro_sucursal, cod_zona, nro_idioma, zona, desc_zona
+) VALUES
+    (1,1,1,1,'Salón Principal', NULL),
+    (1,1,2,1,'Patio Interno',   NULL),
+    (1,1,3,1,'Terraza',         NULL),
+    (1,1,4,1,'Exterior',        NULL),
+    (1,2,1,1,'Salón Principal', NULL),
+    (1,2,2,1,'Patio Interno',   NULL),
+    (1,2,4,1,'Exterior',        NULL),
+    (1,3,1,1,'Salón Principal', NULL),
+    (1,3,2,1,'Patio Interno',   NULL),
+    (1,3,5,1,'Ala Norte',       NULL);
+GO
+
+-- Turnos por sucursal (5 turnos, 3 horas)
+INSERT INTO dbo.turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, hora_desde, hora_hasta, habilitado) VALUES
+    -- Sucursal 1
+    (1,1,'11:00','14:00',1), (1,1,'14:00','17:00',1), (1,1,'17:00','20:00',1), (1,1,'20:00','23:00',1), (1,1,'23:00','02:00',1),
+    -- Sucursal 2
+    (1,2,'11:00','14:00',1), (1,2,'14:00','17:00',1), (1,2,'17:00','20:00',1), (1,2,'20:00','23:00',1), (1,2,'23:00','02:00',1),
+    -- Sucursal 3
+    (1,3,'11:00','14:00',1), (1,3,'14:00','17:00',1), (1,3,'17:00','20:00',1), (1,3,'20:00','23:00',1), (1,3,'23:00','02:00',1);
+GO
+
+-- Cruce Zonas x Turnos (permite menores = 1)
+INSERT INTO dbo.zonas_turnos_sucursales_restaurantes (nro_restaurante, nro_sucursal, cod_zona, hora_desde, permite_menores) VALUES
+    -- Sucursal 1
+    (1,1,1,'11:00',1),(1,1,1,'14:00',1),(1,1,1,'17:00',1),(1,1,1,'20:00',1),(1,1,1,'23:00',1),
+    (1,1,2,'11:00',1),(1,1,2,'14:00',1),(1,1,2,'17:00',1),(1,1,2,'20:00',1),(1,1,2,'23:00',1),
+    (1,1,3,'11:00',1),(1,1,3,'14:00',1),(1,1,3,'17:00',1),(1,1,3,'20:00',1),(1,1,3,'23:00',1),
+    (1,1,4,'11:00',1),(1,1,4,'14:00',1),(1,1,4,'17:00',1),(1,1,4,'20:00',1),(1,1,4,'23:00',1),
+    -- Sucursal 2
+    (1,2,1,'11:00',1),(1,2,1,'14:00',1),(1,2,1,'17:00',1),(1,2,1,'20:00',1),(1,2,1,'23:00',1),
+    (1,2,2,'11:00',1),(1,2,2,'14:00',1),(1,2,2,'17:00',1),(1,2,2,'20:00',1),(1,2,2,'23:00',1),
+    (1,2,4,'11:00',1),(1,2,4,'14:00',1),(1,2,4,'17:00',1),(1,2,4,'20:00',1),(1,2,4,'23:00',1),
+    -- Sucursal 3
+    (1,3,1,'11:00',1),(1,3,1,'14:00',1),(1,3,1,'17:00',1),(1,3,1,'20:00',1),(1,3,1,'23:00',1),
+    (1,3,2,'11:00',1),(1,3,2,'14:00',1),(1,3,2,'17:00',1),(1,3,2,'20:00',1),(1,3,2,'23:00',1),
+    (1,3,5,'11:00',1),(1,3,5,'14:00',1),(1,3,5,'17:00',1),(1,3,5,'20:00',1),(1,3,5,'23:00',1);
+GO
+
+-- Contenidos sincronizados (Español)
+INSERT INTO dbo.contenidos_restaurantes (
+    nro_restaurante, nro_idioma, nro_contenido, nro_sucursal,
+    contenido_promocional, imagen_promocional, contenido_a_publicar,
+    fecha_ini_vigencia, fecha_fin_vigencia, costo_click, cod_contenido_restaurante
+) VALUES
+    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', NULL, 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
+    (1,1,2, NULL, 'Finde Asado para compartir',   NULL, 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
+    (1,1,3, NULL, 'Martes 2x1 Empanadas',         NULL, '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
+    (1,1,4, 1,    'Lomito completo + papas',      NULL, 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
+    (1,1,5, 3,    'Pollo a las brasas al peso',   NULL, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
+GO
+
+-- Diseño invertido: Atributos que representan catálogos del restaurante
+INSERT INTO dbo.atributos (cod_atributo, nom_atributo, tipo_dato) VALUES
+    (1, 'tipos_comidas', 'JSON'),
+    (2, 'preferencias_alimentarias', 'JSON'),
+    (3, 'estilos', 'JSON'),
+    (4, 'zonas', 'JSON');
+GO
+
+-- Configuración del restaurante (valores como JSON)
+INSERT INTO dbo.configuracion_restaurantes (nro_restaurante, cod_atributo, valor) VALUES
+    (1, 1, '["Pastas","Pizzas","Lomitos","Minutas","Parrilla","Empanadas","Pollo a las brasas"]'),
+    (1, 2, '["Sin TAAC (celíacos)","Vegano","Vegetariano","Sin lactosa","Hiposódico"]'),
+    (1, 3, '["Argentina","Italiana","Parrilla","Rotisería"]'),
+    (1, 4, '["Salón Principal","Patio Interno","Terraza","Exterior","Ala Norte"]');
+GO
+
+
 /* =========================================================
    FIN SCRIPT
    ========================================================= */
