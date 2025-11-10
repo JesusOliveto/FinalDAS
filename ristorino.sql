@@ -867,11 +867,11 @@ INSERT INTO dbo.contenidos_restaurantes (
     contenido_promocional, imagen_promocional, contenido_a_publicar,
     fecha_ini_vigencia, fecha_fin_vigencia, costo_click, cod_contenido_restaurante
 ) VALUES
-    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', NULL, 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
-    (1,1,2, NULL, 'Finde Asado para compartir',   NULL, 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
-    (1,1,3, NULL, 'Martes 2x1 Empanadas',         NULL, '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
-    (1,1,4, 1,    'Lomito completo + papas',      NULL, 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
-    (1,1,5, 3,    'Pollo a las brasas al peso',   NULL, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
+    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', 'https://cdn7.kiwilimon.com/brightcove/6364/640x640/6364.jpg.webp', 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
+    (1,1,2, NULL, 'Finde Asado para compartir',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsxMmqWL5HwEZuZjL03vaNdjFx3uF-gnJ92g&s', 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
+    (1,1,3, NULL, 'Martes 2x1 Empanadas',         'https://img-global.cpcdn.com/recipes/50704e6618a99e75/400x400cq80/photo.jpg', '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
+    (1,1,4, 1,    'Lomito completo + papas',      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS21ekQDUJisbO5RN80PLcmJyh5GDg1tT7mNQ&s', 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
+    (1,1,5, 3,    'Pollo a las brasas al peso',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQbRagx08lxxq6udfk4EodjZy1quXfuxAPeDQ&s', 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
 GO
 
 -- Diseño invertido: Atributos que representan catálogos del restaurante
@@ -1073,3 +1073,131 @@ GO
 /*prueba de procedimiento*/
 EXEC dbo.usp_get_promociones_restaurante @nro_restaurante = 1;
 GO
+
+/* =========================================================
+   PROCEDIMIENTO: Registrar click en contenido (Ristorino)
+   Objetivo:
+       Inserta un click asociado a un contenido (restaurante+idioma+contenido)
+       asignando nro_click incremental, tomando costo_click desde el contenido
+       (si existe) y dejando notificado = 0.
+   Parámetros:
+       @nro_restaurante INT
+       @nro_idioma      INT
+       @nro_contenido   INT
+       @fecha_registro  DATETIME2(0) = NULL  -- si NULL usa SYSDATETIME()
+       @nro_cliente     INT = NULL           -- opcional: si se provee y existe, se asocia; si no, permanece NULL
+   Reglas:
+       - Valida existencia del contenido.
+       - Genera nro_click = MAX(nro_click)+1 dentro del (restaurante,idioma,contenido).
+       - Si contenido tiene costo_click -> lo replica; si no -> costo_click NULL.
+       - notificado siempre = 0 inicial.
+   Respuesta JSON:
+       {
+         "click": {"nro_restaurante":1,"nro_idioma":1,"nro_contenido":3,"nro_click":12,
+                    "fecha_hora_registro":"2025-11-09T12:34:00","costo_click":30.00,"notificado":0},
+         "contenido": {"costo_click":30.00,"cod_contenido_restaurante":"GEN-3"}
+       }
+   ========================================================= */
+IF OBJECT_ID('dbo.usp_registrar_click_contenido_restaurante','P') IS NOT NULL
+    DROP PROCEDURE dbo.usp_registrar_click_contenido_restaurante;
+GO
+CREATE PROCEDURE dbo.usp_registrar_click_contenido_restaurante
+    @nro_restaurante INT,
+    @nro_idioma      INT,
+    @nro_contenido   INT,
+    @fecha_registro  DATETIME2(0) = NULL,
+    @nro_cliente     INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @ahora DATETIME2(0) = SYSDATETIME();
+    IF @fecha_registro IS NULL SET @fecha_registro = @ahora;
+
+    BEGIN TRY
+        BEGIN TRAN;
+
+        -- Validar contenido
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.contenidos_restaurantes c
+            WHERE c.nro_restaurante = @nro_restaurante
+              AND c.nro_idioma      = @nro_idioma
+              AND c.nro_contenido   = @nro_contenido
+        )
+        BEGIN
+            RAISERROR('Contenido inexistente.',16,1);
+            ROLLBACK TRAN; RETURN;
+        END;
+
+        -- Validar cliente si viene
+        IF @nro_cliente IS NOT NULL AND NOT EXISTS(SELECT 1 FROM dbo.clientes WHERE nro_cliente=@nro_cliente)
+        BEGIN
+            RAISERROR('Cliente inexistente.',16,1);
+            ROLLBACK TRAN; RETURN;
+        END;
+
+        -- Obtener costo del contenido
+        DECLARE @costo_click DECIMAL(12,2) = NULL;
+        DECLARE @cod_contenido_restaurante VARCHAR(40) = NULL;
+        SELECT @costo_click = c.costo_click,
+               @cod_contenido_restaurante = c.cod_contenido_restaurante
+        FROM dbo.contenidos_restaurantes c
+        WHERE c.nro_restaurante = @nro_restaurante
+          AND c.nro_idioma      = @nro_idioma
+          AND c.nro_contenido   = @nro_contenido;
+
+        -- Generar nro_click incremental
+        DECLARE @nro_click INT = 1;
+        SELECT @nro_click = ISNULL(MAX(nro_click),0)+1
+        FROM dbo.clicks_contenidos_restaurantes
+        WHERE nro_restaurante = @nro_restaurante
+          AND nro_idioma      = @nro_idioma
+          AND nro_contenido   = @nro_contenido;
+
+        INSERT INTO dbo.clicks_contenidos_restaurantes (
+            nro_restaurante, nro_idioma, nro_contenido, nro_click,
+            fecha_hora_registro, nro_cliente, costo_click, notificado
+        ) VALUES (
+            @nro_restaurante, @nro_idioma, @nro_contenido, @nro_click,
+            @fecha_registro, @nro_cliente, @costo_click, 0
+        );
+
+        COMMIT TRAN;
+
+        SELECT
+            click = JSON_QUERY((
+                SELECT @nro_restaurante AS nro_restaurante,
+                       @nro_idioma      AS nro_idioma,
+                       @nro_contenido   AS nro_contenido,
+                       @nro_click       AS nro_click,
+                       @fecha_registro  AS fecha_hora_registro,
+                       @costo_click     AS costo_click,
+                       CAST(0 AS BIT)   AS notificado
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )),
+            contenido = JSON_QUERY((
+                SELECT @costo_click AS costo_click,
+                       @cod_contenido_restaurante AS cod_contenido_restaurante
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            ))
+        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRAN;
+        DECLARE @msg NVARCHAR(4000) = ERROR_MESSAGE();
+        RAISERROR(@msg,16,1);
+    END CATCH
+END
+GO
+
+/* Ejemplo de uso:
+EXEC dbo.usp_registrar_click_contenido_restaurante
+    @nro_restaurante = 1,
+    @nro_idioma = 1,
+    @nro_contenido = 3;  -- click anónimo
+
+EXEC dbo.usp_registrar_click_contenido_restaurante
+    @nro_restaurante = 1,
+    @nro_idioma = 1,
+    @nro_contenido = 3,
+    @nro_cliente = 1001; -- asociado a cliente existente
+*/
