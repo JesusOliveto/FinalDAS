@@ -189,6 +189,7 @@ CREATE TABLE dbo.contenidos (
     publicado             BIT             NOT NULL DEFAULT 0,
     costo_click           DECIMAL(12,2)   NULL,
     nro_sucursal          INT             NULL, -- si NULL: aplica al restaurante
+    cod_contenido_restaurante VARCHAR(40) NOT NULL UNIQUE, 
     CONSTRAINT PK_contenidos PRIMARY KEY (nro_restaurante, nro_contenido),
     CONSTRAINT FK_contenidos_restaurantes
         FOREIGN KEY (nro_restaurante) REFERENCES dbo.restaurantes (nro_restaurante),
@@ -278,24 +279,26 @@ CREATE TABLE dbo.clicks_contenidos (
    Uso previsto: API REST del Bodegón consumida por Ristorino
    Objetivo: Insertar un click evitando colisiones y devolviendo datos útiles.
    Parámetros:
-       @nro_restaurante INT
-       @nro_contenido   INT
-       @nro_cliente     INT            -- cliente origen del click (puede ser proxy)
-       @costo_click     DECIMAL(12,2) = NULL  -- costo recibido desde Ristorino (override)
-       @fecha_registro  DATETIME2(0) = NULL   -- si NULL usa SYSDATETIME()
+       @cod_contenido_restaurante VARCHAR(40)  -- código público para vincular sistemas
+       @nro_cliente              INT = NULL    -- cliente origen del click (opcional)
+       @apellido                 VARCHAR(120) = NULL
+       @nombre                   VARCHAR(120) = NULL
+       @correo                   VARCHAR(200) = NULL
+       @telefonos                VARCHAR(120) = NULL
+       @costo_click              DECIMAL(12,2) = NULL  -- costo recibido desde Ristorino (override)
+       @fecha_registro           DATETIME2(0) = NULL   -- si NULL usa SYSDATETIME()
    Lógica:
-       - Verifica que contenido exista y esté publicado (opcional, si se quiere validar publicado=1)
-       - Genera nro_click incremental por contenido
+       - Ubica el contenido por cod_contenido_restaurante (único). Si hay 0 o >1 coincidencias, error.
+       - Genera nro_click incremental por (nro_restaurante, nro_contenido)
        - Inserta fila y retorna JSON con los datos del click
    Respuesta JSON:
-       {"nro_restaurante":1,"nro_contenido":4,"nro_click":12,"fecha_hora_registro":"2025-11-07T12:34:00","costo_click":40.00}
+       {"nro_restaurante":1,"nro_contenido":4,"nro_click":12,"fecha_hora_registro":"2025-11-07T12:34:00","costo_click":40.00,"cod_contenido_restaurante":"MilaPapaBeb_1"}
    ========================================================= */
 IF OBJECT_ID('dbo.usp_registrar_click_contenido','P') IS NOT NULL
     DROP PROCEDURE dbo.usp_registrar_click_contenido;
 GO
 CREATE PROCEDURE dbo.usp_registrar_click_contenido
-    @nro_restaurante INT,
-    @nro_contenido   INT,
+    @cod_contenido_restaurante VARCHAR(40),
     @nro_cliente     INT = NULL,              -- opcional: si se pasa y existe se usa; admite NULL (click anónimo)
     @apellido        VARCHAR(120) = NULL,     -- opcional; requerido solo si se va a crear cliente
     @nombre          VARCHAR(120) = NULL,     -- opcional; requerido solo si se va a crear cliente
@@ -312,16 +315,28 @@ BEGIN
     BEGIN TRY
         BEGIN TRAN;
 
-        -- Validar contenido
-        IF NOT EXISTS (
-            SELECT 1 FROM dbo.contenidos c
-            WHERE c.nro_restaurante = @nro_restaurante
-              AND c.nro_contenido   = @nro_contenido
-        )
+        -- Resolver contenido por código público y validar unicidad
+        DECLARE @nro_restaurante INT, @nro_contenido INT, @conteos INT;
+        SELECT @conteos = COUNT(*)
+        FROM dbo.contenidos c
+        WHERE c.cod_contenido_restaurante = @cod_contenido_restaurante;
+
+        IF ISNULL(@conteos,0) = 0
         BEGIN
-            RAISERROR('Contenido inexistente para el restaurante.', 16, 1);
+            RAISERROR('Contenido inexistente para el código provisto.', 16, 1);
             ROLLBACK TRAN; RETURN;
         END;
+        IF @conteos > 1
+        BEGIN
+            RAISERROR('Código de contenido no es único. No se puede resolver el contenido de forma inequívoca.', 16, 1);
+            ROLLBACK TRAN; RETURN;
+        END;
+
+        SELECT TOP(1)
+            @nro_restaurante = c.nro_restaurante,
+            @nro_contenido   = c.nro_contenido
+        FROM dbo.contenidos c
+        WHERE c.cod_contenido_restaurante = @cod_contenido_restaurante;
 
         -- Resolver/crear cliente (opcional). Si no hay datos -> click anónimo.
         DECLARE @cliente_resuelto INT = NULL;
@@ -376,7 +391,7 @@ BEGIN
         END
         -- Si no se pudo resolver cliente: se registra click anónimo (nro_cliente NULL)
 
-        -- Obtener siguiente nro_click
+                -- Obtener siguiente nro_click
         DECLARE @nro_click INT = 1;
         SELECT @nro_click = ISNULL(MAX(nro_click),0) + 1
         FROM dbo.clicks_contenidos
@@ -400,7 +415,8 @@ BEGIN
                     @nro_contenido   AS nro_contenido,
                     @nro_click       AS nro_click,
                     @fecha_registro  AS fecha_hora_registro,
-                    @costo_click     AS costo_click
+                    @costo_click     AS costo_click,
+                    @cod_contenido_restaurante AS cod_contenido_restaurante
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
             )),
             cliente = JSON_QUERY((
@@ -420,10 +436,9 @@ GO
 
 /* Ejemplo de ejecución
 EXEC dbo.usp_registrar_click_contenido
-    @nro_restaurante = 1,
-    @nro_contenido   = 4,
-    @nro_cliente     = 1001,      -- asumir cliente precargado
-    @costo_click     = 42.50;     -- opcional
+    @cod_contenido_restaurante = 'MilaPapaBeb_1',
+    @nro_cliente               = 1001,      -- asumir cliente precargado (o NULL para anónimo)
+    @costo_click               = 42.50;     -- opcional (si NULL, puede tomarse el valor vigente del contenido)
 */
 
 /* =======================
@@ -598,12 +613,12 @@ INSERT INTO dbo.zonas_turnos_sucursales (nro_restaurante, nro_sucursal, cod_zona
     (1,3,5,'11:00',1),(1,3,5,'14:00',1),(1,3,5,'17:00',1),(1,3,5,'20:00',1),(1,3,5,'23:00',1);
 
 -- Contenidos promocionales (a nivel restaurante y sucursal)
-INSERT INTO dbo.contenidos (nro_restaurante, nro_contenido, contenido_a_publicar, imagen_a_publicar, publicado, costo_click, nro_sucursal) VALUES
-    (1, 1, 'Promo: Milanesa napolitana con papas y bebida', NULL, 1, 50.00, NULL),
-    (1, 2, 'Finde: Asado a la parrilla - porciones para compartir', NULL, 1, 70.00, NULL),
-    (1, 3, '2x1 en empanadas los martes', NULL, 1, 30.00, NULL),
-    (1, 4, 'Lomito completo + papas (Sucursal Av. Colón)', NULL, 1, 40.00, 1),
-    (1, 5, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', NULL, 1, 45.00, 3);
+INSERT INTO dbo.contenidos (nro_restaurante, nro_contenido, contenido_a_publicar, imagen_a_publicar, publicado, costo_click, nro_sucursal, cod_contenido_restaurante) VALUES
+    (1, 1, 'Promo: Milanesa napolitana con papas y bebida', NULL, 1, NULL, NULL, 'MilaPapaBeb_1'),
+    (1, 2, 'Finde: Asado a la parrilla - porciones para compartir', NULL, 1, NULL, NULL, 'AsadoPromo_1'),
+    (1, 3, '2x1 en empanadas los martes', NULL, 1, NULL, NULL, 'Empanadas2x1_1'),
+    (1, 4, 'Lomito completo + papas (Sucursal Av. Colón)', NULL, 1, NULL, 1, 'LomitoPapasCol_1'),
+    (1, 5, 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', NULL, 1, NULL, 3, 'PolloBrasasRN_1');
 
 -- Tipos de comidas habilitados por sucursal
 INSERT INTO dbo.tipos_comidas_sucursales (nro_restaurante, nro_sucursal, nro_tipo_comida, habilitado) VALUES

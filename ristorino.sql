@@ -867,11 +867,11 @@ INSERT INTO dbo.contenidos_restaurantes (
     contenido_promocional, imagen_promocional, contenido_a_publicar,
     fecha_ini_vigencia, fecha_fin_vigencia, costo_click, cod_contenido_restaurante
 ) VALUES
-    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', 'https://cdn7.kiwilimon.com/brightcove/6364/640x640/6364.jpg.webp', 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'GEN-1'),
-    (1,1,2, NULL, 'Finde Asado para compartir',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsxMmqWL5HwEZuZjL03vaNdjFx3uF-gnJ92g&s', 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'GEN-2'),
-    (1,1,3, NULL, 'Martes 2x1 Empanadas',         'https://img-global.cpcdn.com/recipes/50704e6618a99e75/400x400cq80/photo.jpg', '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'GEN-3'),
-    (1,1,4, 1,    'Lomito completo + papas',      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS21ekQDUJisbO5RN80PLcmJyh5GDg1tT7mNQ&s', 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'S1-LOMITO'),
-    (1,1,5, 3,    'Pollo a las brasas al peso',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQbRagx08lxxq6udfk4EodjZy1quXfuxAPeDQ&s', 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'S3-POLLO');
+    (1,1,1, NULL, 'Promo Milanesa Napo + bebida', 'https://cdn7.kiwilimon.com/brightcove/6364/640x640/6364.jpg.webp', 'Promo: Milanesa napolitana con papas y bebida', CAST(GETDATE() AS DATE), NULL, 50.00, 'MilaPapaBeb_1'),
+    (1,1,2, NULL, 'Finde Asado para compartir',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsxMmqWL5HwEZuZjL03vaNdjFx3uF-gnJ92g&s', 'Finde: Asado a la parrilla - porciones para compartir', CAST(GETDATE() AS DATE), NULL, 70.00, 'AsadoPromo_1'),
+    (1,1,3, NULL, 'Martes 2x1 Empanadas',         'https://img-global.cpcdn.com/recipes/50704e6618a99e75/400x400cq80/photo.jpg', '2x1 en empanadas los martes', CAST(GETDATE() AS DATE), NULL, 30.00, 'Empanadas2x1_1'),
+    (1,1,4, 1,    'Lomito completo + papas',      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS21ekQDUJisbO5RN80PLcmJyh5GDg1tT7mNQ&s', 'Lomito completo + papas (Sucursal Av. Colón)', CAST(GETDATE() AS DATE), NULL, 40.00, 'LomitoPapasCol_1'),
+    (1,1,5, 3,    'Pollo a las brasas al peso',   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQbRagx08lxxq6udfk4EodjZy1quXfuxAPeDQ&s', 'Pollo a las brasas al peso (Sucursal Rafael Núñez)', CAST(GETDATE() AS DATE), NULL, 45.00, 'PolloBrasasRN_1');
 GO
 
 -- Diseño invertido: Atributos que representan catálogos del restaurante
