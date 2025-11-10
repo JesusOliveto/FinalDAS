@@ -392,7 +392,7 @@ CREATE TABLE dbo.clicks_contenidos_restaurantes (
     nro_contenido        INT            NOT NULL,
     nro_click            INT            NOT NULL,
     fecha_hora_registro  DATETIME2(0)   NOT NULL DEFAULT SYSDATETIME(),
-    nro_cliente          INT            NOT NULL,
+    nro_cliente          INT            NULL,
     costo_click          DECIMAL(12,2)  NULL,
     notificado           BIT            NOT NULL DEFAULT 0,
     CONSTRAINT PK_clicks_cont_rest PRIMARY KEY (nro_restaurante, nro_idioma, nro_contenido, nro_click),
@@ -1201,3 +1201,95 @@ EXEC dbo.usp_registrar_click_contenido_restaurante
     @nro_contenido = 3,
     @nro_cliente = 1001; -- asociado a cliente existente
 */
+
+/* =========================================================
+   PROCEDIMIENTO: Obtener clicks no notificados (JSON)
+   Devuelve todos los clicks con notificado = 0. Permite filtros opcionales.
+   Parámetros:
+       @nro_restaurante INT = NULL
+       @nro_idioma      INT = NULL
+       @nro_contenido   INT = NULL
+   Salida: JSON con arreglo de clicks enriquecidos con info de contenido.
+   ========================================================= */
+IF OBJECT_ID('dbo.usp_get_clicks_no_notificados','P') IS NOT NULL
+    DROP PROCEDURE dbo.usp_get_clicks_no_notificados;
+GO
+CREATE PROCEDURE dbo.usp_get_clicks_no_notificados
+    @nro_restaurante INT = NULL,
+    @nro_idioma      INT = NULL,
+    @nro_contenido   INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        click = (
+            SELECT
+                cc.nro_restaurante,
+                cc.nro_idioma,
+                cc.nro_contenido,
+                cc.nro_click,
+                cc.fecha_hora_registro,
+                cc.nro_cliente,
+                cc.costo_click,
+                cc.notificado
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        ),
+        contenido = (
+            SELECT
+                c.cod_contenido_restaurante,
+                c.contenido_promocional,
+                c.imagen_promocional,
+                c.contenido_a_publicar,
+                c.costo_click
+            FROM dbo.contenidos_restaurantes c
+            WHERE c.nro_restaurante = cc.nro_restaurante
+              AND c.nro_idioma      = cc.nro_idioma
+              AND c.nro_contenido   = cc.nro_contenido
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        )
+    FROM dbo.clicks_contenidos_restaurantes cc
+    WHERE cc.notificado = 0
+      AND (@nro_restaurante IS NULL OR cc.nro_restaurante = @nro_restaurante)
+      AND (@nro_idioma      IS NULL OR cc.nro_idioma      = @nro_idioma)
+      AND (@nro_contenido   IS NULL OR cc.nro_contenido   = @nro_contenido)
+    FOR JSON PATH;
+END
+GO
+
+/* =========================================================
+   PROCEDIMIENTO: Confirmar notificación de un click
+   Marca notificado = 1 para un click identificado por su clave completa.
+   Parámetros:
+       @nro_restaurante INT
+       @nro_idioma      INT
+       @nro_contenido   INT
+       @nro_click       INT
+   ========================================================= */
+IF OBJECT_ID('dbo.usp_confirmar_click_notificado','P') IS NOT NULL
+    DROP PROCEDURE dbo.usp_confirmar_click_notificado;
+GO
+CREATE PROCEDURE dbo.usp_confirmar_click_notificado
+    @nro_restaurante INT,
+    @nro_idioma      INT,
+    @nro_contenido   INT,
+    @nro_click       INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.clicks_contenidos_restaurantes
+       SET notificado = 1
+     WHERE nro_restaurante = @nro_restaurante
+       AND nro_idioma      = @nro_idioma
+       AND nro_contenido   = @nro_contenido
+       AND nro_click       = @nro_click
+       AND notificado      = 0;
+
+    SELECT
+        actualizado = @@ROWCOUNT
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER;
+END
+GO
+
+SELECT * from clicks_contenidos_restaurantes;
