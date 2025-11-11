@@ -34,6 +34,9 @@ public class ClickResponse {
         @JsonProperty("costo_click")
         private Double costoClick;
 
+        @JsonProperty("cod_contenido_restaurante")
+        private String codContenidoRestaurante;
+
         public Integer getNroRestaurante() { return nroRestaurante; }
         public void setNroRestaurante(Integer nroRestaurante) { this.nroRestaurante = nroRestaurante; }
         public Integer getNroContenido() { return nroContenido; }
@@ -44,6 +47,8 @@ public class ClickResponse {
         public void setFechaHoraRegistro(String fechaHoraRegistro) { this.fechaHoraRegistro = fechaHoraRegistro; }
         public Double getCostoClick() { return costoClick; }
         public void setCostoClick(Double costoClick) { this.costoClick = costoClick; }
+        public String getCodContenidoRestaurante() { return codContenidoRestaurante; }
+        public void setCodContenidoRestaurante(String codContenidoRestaurante) { this.codContenidoRestaurante = codContenidoRestaurante; }
     }
 
     public static class ClienteDTO {

@@ -22,32 +22,40 @@ public class ClicksRepository {
     private ObjectMapper objectMapper;
 
     public ClickResponse registrarClick(ClickRequest req) {
-        final String sql = "EXEC dbo.usp_registrar_click_contenido ?,?,?,?,?,?,?,?,?";
+        final String sql = "EXEC dbo.usp_registrar_click_contenido ?,?,?,?,?,?,?,?";
 
         List<String> rows = jdbcTpl.query(sql, ps -> {
-            ps.setInt(1, req.getNroRestaurante());
-            ps.setInt(2, req.getNroContenido());
+            // 1) cod_contenido_restaurante
+            if (req.getCodContenidoRestaurante() == null) ps.setNull(1, Types.VARCHAR);
+            else ps.setString(1, req.getCodContenidoRestaurante());
 
-            if (req.getNroCliente() == null) ps.setNull(3, Types.INTEGER);
-            else ps.setInt(3, req.getNroCliente());
+            // 2) nro_cliente
+            if (req.getNroCliente() == null) ps.setNull(2, Types.INTEGER);
+            else ps.setInt(2, req.getNroCliente());
 
-            if (req.getApellido() == null) ps.setNull(4, Types.VARCHAR);
-            else ps.setString(4, req.getApellido());
+            // 3) apellido
+            if (req.getApellido() == null) ps.setNull(3, Types.VARCHAR);
+            else ps.setString(3, req.getApellido());
 
-            if (req.getNombre() == null) ps.setNull(5, Types.VARCHAR);
-            else ps.setString(5, req.getNombre());
+            // 4) nombre
+            if (req.getNombre() == null) ps.setNull(4, Types.VARCHAR);
+            else ps.setString(4, req.getNombre());
 
-            if (req.getCorreo() == null) ps.setNull(6, Types.VARCHAR);
-            else ps.setString(6, req.getCorreo());
+            // 5) correo
+            if (req.getCorreo() == null) ps.setNull(5, Types.VARCHAR);
+            else ps.setString(5, req.getCorreo());
 
-            if (req.getTelefonos() == null) ps.setNull(7, Types.VARCHAR);
-            else ps.setString(7, req.getTelefonos());
+            // 6) telefonos
+            if (req.getTelefonos() == null) ps.setNull(6, Types.VARCHAR);
+            else ps.setString(6, req.getTelefonos());
 
-            if (req.getCostoClick() == null) ps.setNull(8, Types.DECIMAL);
-            else ps.setBigDecimal(8, java.math.BigDecimal.valueOf(req.getCostoClick()));
+            // 7) costo_click
+            if (req.getCostoClick() == null) ps.setNull(7, Types.DECIMAL);
+            else ps.setBigDecimal(7, java.math.BigDecimal.valueOf(req.getCostoClick()));
 
-            if (req.getFechaRegistro() == null) ps.setNull(9, Types.TIMESTAMP);
-            else ps.setTimestamp(9, java.sql.Timestamp.valueOf(req.getFechaRegistro()));
+            // 8) fecha_registro
+            if (req.getFechaRegistro() == null) ps.setNull(8, Types.TIMESTAMP);
+            else ps.setTimestamp(8, java.sql.Timestamp.valueOf(req.getFechaRegistro()));
         }, (rs, rn) -> rs.getString(1));
 
         if (rows == null || rows.isEmpty() || rows.get(0) == null) {

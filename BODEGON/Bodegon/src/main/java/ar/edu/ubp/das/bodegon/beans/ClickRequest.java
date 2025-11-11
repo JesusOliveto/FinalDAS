@@ -4,11 +4,10 @@ import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
 
 public class ClickRequest {
-    @NotNull @Min(1)
-    private Integer nroRestaurante;
-
-    @NotNull @Min(1)
-    private Integer nroContenido;
+    // Identificador público de contenido (requerido por el nuevo SP)
+    @NotBlank
+    @Size(max = 40)
+    private String codContenidoRestaurante;
 
     // ---- Todos los de abajo son opcionales (click anónimo admitido) ----
     @Min(1)
@@ -26,11 +25,8 @@ public class ClickRequest {
     private LocalDateTime fechaRegistro;
 
     // Getters / Setters
-    public Integer getNroRestaurante() { return nroRestaurante; }
-    public void setNroRestaurante(Integer nroRestaurante) { this.nroRestaurante = nroRestaurante; }
-
-    public Integer getNroContenido() { return nroContenido; }
-    public void setNroContenido(Integer nroContenido) { this.nroContenido = nroContenido; }
+    public String getCodContenidoRestaurante() { return codContenidoRestaurante; }
+    public void setCodContenidoRestaurante(String codContenidoRestaurante) { this.codContenidoRestaurante = codContenidoRestaurante; }
 
     public Integer getNroCliente() { return nroCliente; }
     public void setNroCliente(Integer nroCliente) { this.nroCliente = nroCliente; }
