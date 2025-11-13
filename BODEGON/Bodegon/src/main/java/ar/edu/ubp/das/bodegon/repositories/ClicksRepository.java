@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 import java.sql.Types;
 import java.util.List;
 
+/**
+ * Repositorio encargado de invocar el procedimiento almacenado dbo.usp_registrar_click_contenido.\n *\n * Encapsula la construcción del PreparedStatement para pasar todos los parámetros opcionales\n * y hace el parseo del JSON devuelto (incluyendo normalización si el SP retorna strings con JSON interno).\n *\n * Manejo de errores: si el SP no devuelve una fila JSON se lanza IllegalStateException.\n */
 @Repository
 public class ClicksRepository {
 
@@ -21,39 +23,45 @@ public class ClicksRepository {
     @Autowired
     private ObjectMapper objectMapper;
 
+    /**
+     * Invoca el SP de registro de clic pasando los parámetros presentes en el request.\n     * @param req datos de entrada del clic\n     * @return estructura parseada del JSON retornado por SQL Server\n     */
     public ClickResponse registrarClick(ClickRequest req) {
         final String sql = "EXEC dbo.usp_registrar_click_contenido ?,?,?,?,?,?,?,?";
 
+        System.out.printf("[registrarClick] cod=%s nroCliente=%s apellido=%s nombre=%s correo=%s telefonos=%s costo=%s fecha=%s%n",
+                req.getCodContenidoRestaurante(), req.getNroCliente(), req.getApellido(), req.getNombre(),
+                req.getCorreo(), req.getTelefonos(), req.getCostoClick(), req.getFechaRegistro());
+
         List<String> rows = jdbcTpl.query(sql, ps -> {
-            // 1) cod_contenido_restaurante
+            // 1) cod_contenido_restaurante (VARCHAR(40))
             if (req.getCodContenidoRestaurante() == null) ps.setNull(1, Types.VARCHAR);
             else ps.setString(1, req.getCodContenidoRestaurante());
 
-            // 2) nro_cliente
+            // 2) nro_cliente (INT)
             if (req.getNroCliente() == null) ps.setNull(2, Types.INTEGER);
             else ps.setInt(2, req.getNroCliente());
 
-            // 3) apellido
+            // 3) apellido (VARCHAR(120))
             if (req.getApellido() == null) ps.setNull(3, Types.VARCHAR);
             else ps.setString(3, req.getApellido());
 
-            // 4) nombre
+            // 4) nombre (VARCHAR(120))
             if (req.getNombre() == null) ps.setNull(4, Types.VARCHAR);
             else ps.setString(4, req.getNombre());
 
-            // 5) correo
+            // 5) correo (VARCHAR(200))
             if (req.getCorreo() == null) ps.setNull(5, Types.VARCHAR);
             else ps.setString(5, req.getCorreo());
 
-            // 6) telefonos
+            // 6) telefonos (VARCHAR(120))
             if (req.getTelefonos() == null) ps.setNull(6, Types.VARCHAR);
             else ps.setString(6, req.getTelefonos());
 
-            // 7) costo_click
+            // 7) costo_click (DECIMAL(12,2))
             if (req.getCostoClick() == null) ps.setNull(7, Types.DECIMAL);
             else ps.setBigDecimal(7, java.math.BigDecimal.valueOf(req.getCostoClick()));
 
-            // 8) fecha_registro
+            // 8) fecha_registro (DATETIME2(0))
             if (req.getFechaRegistro() == null) ps.setNull(8, Types.TIMESTAMP);
             else ps.setTimestamp(8, java.sql.Timestamp.valueOf(req.getFechaRegistro()));
         }, (rs, rn) -> rs.getString(1));
